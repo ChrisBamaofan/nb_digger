@@ -1,0 +1,30 @@
+data_sources:
+  tushare:
+    api_key: "922bead97a3fa523fc498d2e22d7d8404f47b4b8c97a3e2d4ef7b6ed"
+    rate_limit: 5  # 请求间隔(秒)
+  
+  xueqiu:
+    cookies: ""
+    user_agent: "Mozilla/5.0"
+
+stocks:
+  a_share: ["000001.SZ", "600000.SH"]
+  index: ["000300.SH", "000905.SH"]
+
+logging:
+  console_level: "INFO"
+  file_level: "DEBUG"
+  error_level: "ERROR"
+  log_dir: "data/logs"
+  console_format: "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+  file_format: "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {module}:{function}:{line} - {message}"
+  rotation: "00:00"
+  retention: "30 days"
+  compression: "zip"
+
+tdengine:
+  url: "http://192.168.58.148:6041"
+  port: 6030
+  user: "root"
+  password: "taosdata"
+  database: "nb_stock"

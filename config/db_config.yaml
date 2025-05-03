@@ -1,0 +1,8 @@
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "51804991"
+  database: "nb_stock"
+  pool_size: 5
+  max_overflow: 10
