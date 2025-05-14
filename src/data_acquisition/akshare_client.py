@@ -1,9 +1,12 @@
 import akshare as ak
 from loguru import logger
 import pandas as pd
-from typing import Optional
+from typing import List, Optional
 from typing import Optional, Literal
+import pymysql
+from datetime import datetime
 from utils.config_loader import load_config
+import time
 
 class AKShareClient:
     def __init__(self):
@@ -28,7 +31,7 @@ class AKShareClient:
         """
         try:
             
-            print(symbol+","+period+","+start_date+","+end_date+","+adjust)
+            logger.info(symbol+","+period+","+start_date+","+end_date+","+adjust)
             # 获取数据
             df = ak.stock_zh_a_hist(
                 symbol=symbol,
@@ -66,7 +69,7 @@ class AKShareClient:
             return df.reset_index(drop=True)
             
         except Exception as e:
-            logger.error(f"AKShare获取{period}数据失败: {e}")
+            logger.error(f"AKShare获取{symbol}{period}数据失败: {e}")
             return None
     
     # 获取日线数据
@@ -97,3 +100,29 @@ class AKShareClient:
             'scope_type': period,
             'create_user': 'system'
         })
+    
+
+    @staticmethod
+    def check_delisted_stocks( stock_ids: List[str]) -> List[str]:
+        """
+        检查哪些股票已退市
+        :param stock_ids: 股票代码列表
+        :return: 已退市的股票代码列表
+        """
+        delisted_stocks = []
+        
+        for stock_id in stock_ids:
+            try:
+                
+                time.sleep(2)
+                stock_info = ak.stock_individual_info_em(symbol=stock_id)
+                total_share = stock_info.loc[stock_info["item"] == "总股本", "value"].values[0]
+                
+                if total_share == "-":
+                    delisted_stocks.append(stock_id)
+                    
+                    print(f"检测到退市股票: {stock_id}")
+            except Exception as e:
+                print(f"检查股票 {stock_id} 时出错: {e}")
+        
+        return delisted_stocks

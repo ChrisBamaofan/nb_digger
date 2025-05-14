@@ -7,16 +7,17 @@ import pandas as pd
 from database.tdengine_writer import TDEngineWriter
 import time
 
+import akshare as ak
 
 def main():
     setup_logger()
     
     akshare = AKShareClient()
     db_manager = DBManager()
-    
+
     # 获取数据时间范围
     start_date = date(2025, 4, 12).strftime('%Y%m%d')
-    end_date = date(2025, 5, 15).strftime('%Y%m%d')
+    end_date = date(2025, 5, 3).strftime('%Y%m%d')
 
     # 股票列表 (示例)
     # stock_list = [('002336','china.shenzhen')]
@@ -24,10 +25,13 @@ def main():
     
     
     for stock in stock_list:
+        
+        # 睡眠6秒钟
+        time.sleep(6)
         stock_id = stock.stock_id
         # akshare: daily_day,weekly_week,monthly_month,
-        period_ak = 'daily'
-        period_local = 'day'
+        period_ak = 'monthly'
+        period_local = 'month'
         log.info(f"正在处理股票: {stock},{period_local}")
 
         
@@ -40,6 +44,8 @@ def main():
             adjust="qfq"
         )
         
+        # log.info(raw_data)
+
         if raw_data is not None:
             """同步数据到 mysql"""
             db_ready_data = akshare.convert_to_db_format(raw_data,period_local)
@@ -57,9 +63,10 @@ def main():
                 company_id=stock_id,
                 table_name = table_name_td
             )
-        # 睡眠6秒钟
-        time.sleep(6)
+
+
 
 
 if __name__ == "__main__":
     main()
+    

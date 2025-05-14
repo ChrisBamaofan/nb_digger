@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, BigInteger, Numeric
+from sqlalchemy import Column, Integer, String, TIMESTAMP, BigInteger, Numeric,Boolean
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -39,6 +39,8 @@ class StockBasicInfo(Base):
     launch_date = Column(TIMESTAMP, nullable=False, server_default='CURRENT_TIMESTAMP', comment='上市日期')
     create_time = Column(TIMESTAMP, nullable=False, server_default='CURRENT_TIMESTAMP', comment='创建时间')
     create_user = Column(String(100), nullable=False, default='system', comment='创建人')
+    
+    is_retired = Column(Boolean,nullable=False, default=0.0, comment='是否退市')
     
     __table_args__ = (
         {'comment': '单个股票简介表'},
