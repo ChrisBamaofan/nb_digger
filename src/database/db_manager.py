@@ -60,7 +60,7 @@ class DBManager:
                 session.merge(record)
                 
             session.commit()
-            logger.success(f"成功保存/更新{len(records)}条日线数据")
+            logger.success(f"成功保存/更新{len(records)}条交易数据")
         except Exception as e:
             session.rollback()
             logger.error(f"数据保存失败: {e}")
@@ -83,6 +83,19 @@ class DBManager:
         finally:
             session.close()
 
+    def get_stock_basic_info(self,stock_id:str) -> StockBasicInfo:
+        session=self.Session()
+        try:
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.launch_date).where(StockBasicInfo.stock_id== stock_id).one()
+            
+            # logger.success(stock_daily_list)
+            return stock_daily_list
+        except Exception as e:
+            logger.error(f"获取基本数据列表失败: {e}")
+            raise
+        finally:
+            session.close()
+
     def get_stock_per_day(self, stock_id: str, period: str,trade_date: str) -> StockDaily:
         session = self.Session()
         try:
@@ -98,6 +111,23 @@ class DBManager:
             raise
         finally:
             session.close()
+
+    def get_stock_per_day_list(self, stock_id: str, period: str,trade_date: str) -> List[StockDaily]:
+        session = self.Session()
+        try:
+            result = session.query(StockDaily).where(
+                StockDaily.stock_id == stock_id,
+                StockDaily.scope_type == period,
+                StockDaily.trade_date <= trade_date
+            ).order_by(desc(StockDaily.trade_date)).all()
+            logger.info(f"成功获取股票{stock_id}的历史交易数据")
+            return result
+        except Exception as e:
+            logger.warning(f"未找到{stock_id}的{period}周期数据")
+            raise
+        finally:
+            session.close()
+
 
     def update_delisted_status(self, delisted_stocks: List[str]) -> int:
         """
@@ -129,5 +159,42 @@ class DBManager:
             session.rollback()
             print(f"更新退市状态时出错: {e}")
             return 0
+        finally:
+            session.close()
+
+            # 'total_stock': float(df[df['item'] == '总股本']['value'].iloc[0]),
+            # 'circulating_stock': float(df[df['item'] == '流通股']['value'].iloc[0]),
+            # 'total_mark_value': float(df[df['item'] == '总市值']['value'].iloc[0]),
+            # 'circulating_market_value': float(df[df['item'] == '流通市值']['value'].iloc[0]),
+            # 'industry': df[df['item'] == '行业']['value'].iloc[0]
+
+    def update_basic_info(self,basic_df:dict):
+        """更新股票基本信息"""
+        session = self.Session()
+        try:
+            # 数据预处理
+            stock_id = basic_df['stock_id']
+            
+            existing = session.query(StockBasicInfo).filter_by(stock_id=stock_id).first()
+            if existing:
+                # 只更新需要变更的字段
+                existing.circulating_market_value = basic_df['circulating_market_value']
+                existing.total_market_value = basic_df['total_market_value']
+                existing.circulating_stock = basic_df['circulating_stock']
+                existing.total_stock = basic_df['total_stock']
+                existing.industry = basic_df['industry']
+                existing.launch_date = basic_df['launch_date']
+                
+            else:
+                session.add(StockBasicInfo(**basic_df))
+                
+            session.commit()
+            
+            logger.success(f"成功更新股票{stock_id}基本信息")
+            
+        except Exception as e:
+            session.rollback()
+            logger.error(f"股票基本信息更新失败: {e}")
+            raise
         finally:
             session.close()

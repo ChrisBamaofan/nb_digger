@@ -148,3 +148,4 @@ Thumbs.db
 
 # Virtual environment
 venv/
+data/

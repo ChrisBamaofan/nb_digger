@@ -23,7 +23,7 @@ class TDEngineConnector:
                     timezone='Asia/Shanghai',
                     timeout=30
                 )
-                log.success("TDEngine连接成功")
+                # log.success("TDEngine连接成功")
             except Exception as e:
                 log.error(f"TDEngine连接失败: {e}")
                 raise

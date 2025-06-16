@@ -34,13 +34,18 @@ class StockBasicInfo(Base):
     
     pid = Column(Integer, primary_key=True, autoincrement=True, comment='主键')
     stock_name = Column(String(30), nullable=False, default='0', comment='股票名,中文或英文')
-    stock_id = Column(String(30), nullable=False, default='NULL999999', comment='股票编号，SH000001')
+    stock_id = Column(String(30), nullable=False, default='0', comment='股票编号，SH000001')
     location = Column(String(100), nullable=False, default='china.shanghai', comment='上市交易所，例如，上交所')
     launch_date = Column(TIMESTAMP, nullable=False, server_default='CURRENT_TIMESTAMP', comment='上市日期')
     create_time = Column(TIMESTAMP, nullable=False, server_default='CURRENT_TIMESTAMP', comment='创建时间')
     create_user = Column(String(100), nullable=False, default='system', comment='创建人')
-    
+    circulating_market_value = Column(Numeric(16, 2), nullable=False, default=0.0, comment='流通市值')
+    total_market_value = Column(Numeric(17, 6), nullable=False, default=0.0, comment='总市值')
+    circulating_stock = Column(Numeric(16, 2), nullable=False, default=0.0, comment='流通股')
+    total_stock = Column(Numeric(16, 2), nullable=False, default=0.0, comment='总股本')
+    industry = Column(String(100), nullable=True, comment='行业')
     is_retired = Column(Boolean,nullable=False, default=0.0, comment='是否退市')
+
     
     __table_args__ = (
         {'comment': '单个股票简介表'},

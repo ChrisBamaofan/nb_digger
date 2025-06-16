@@ -126,3 +126,27 @@ class AKShareClient:
                 print(f"检查股票 {stock_id} 时出错: {e}")
         
         return delisted_stocks
+    
+    def get_stock_basic(self,stock_id:str) ->  Optional[pd.DataFrame]:
+        df = ak.stock_individual_info_em(symbol=stock_id)
+        
+        df[df['item'] == '股票代码']['value'].iloc[0]
+        metrics = {
+            'stock_id': stock_id,
+            'total_stock': float(df[df['item'] == '总股本']['value'].iloc[0]),
+            'circulating_stock': float(df[df['item'] == '流通股']['value'].iloc[0]),
+            'total_market_value': float(df[df['item'] == '总市值']['value'].iloc[0]),
+            'circulating_market_value': float(df[df['item'] == '流通市值']['value'].iloc[0]),
+            'industry': df[df['item'] == '行业']['value'].iloc[0],
+            'launch_date': df[df['item'] == '上市时间']['value'].iloc[0]
+        }
+        
+        return metrics
+    
+    def get_realtime_data(self,stock_id:str) -> float:
+        df = ak.stock_bid_ask_em(symbol=stock_id)
+        va = df[df['item'] == '最新']['value'].values[0]
+        return va
+
+    def getHold(self,stock_id:str) :
+        return ak.stock_ggcg_em(symbol="股东减持")

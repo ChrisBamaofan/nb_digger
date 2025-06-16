@@ -70,10 +70,10 @@ class TDEngineWriter:
             )
             """.strip().replace('\n', ' ')
             
-            log.info(f"Executing SQL:\n{formatted_sql}")
+            # log.info(f"Executing SQL:\n{formatted_sql}")
             
             tdengine.execute(formatted_sql)
-            log.info(f"TDEngine动态表 {db}.{table_name} 已创建/确认存在")
+            # log.info(f"TDEngine动态表 {db}.{table_name} 已创建/确认存在")
             return True
         except Exception as e:
             log.error(f"TDEngine表创建失败: {e}")
