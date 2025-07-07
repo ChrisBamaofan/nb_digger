@@ -17,13 +17,16 @@ def dig_data():
     db_manager = DBManager()
 
     # 获取数据时间范围
-    end_date = date(2025, 12, 3).strftime('%Y%m%d')
-
+    # 620的日，621的日，月，季度
+    start = date(2025, 7, 1).strftime('%Y%m%d')
+    end_date = date(2025, 7, 5).strftime('%Y%m%d')
+    
     # 股票列表 (示例)
     # stock_list = [('002336','china.shenzhen')]
     stock_list = db_manager.get_stock_id_list()
     
-    input_str = "daily_day,weekly_week"
+    # akshare: daily_day,weekly_week,monthly_month
+    input_str = "weekly_week"
     items = input_str.split(',')
 
     for item in items:
@@ -32,19 +35,23 @@ def dig_data():
 
         for stock in stock_list:
             
-            # 睡眠6秒钟
-            time.sleep(8)
+            # time.sleep(3)
             stock_id = stock.stock_id
-            # akshare: daily_day,weekly_week,monthly_month
+            # basic = akshare.get_stock_basic(stock_id)
+            # db_manager.update_basic_info(basic)
+
+            # 睡眠6秒钟
+            time.sleep(4)
+            
             period_ak = parts[0]
             period_local = parts[1]
             
             
             log.info(f"正在处理股票: {stock},{period_local},{period_ak}")
 
-            basic_info = db_manager.get_stock_basic_info(stock_id)
+            # basic_info = db_manager.get_stock_basic_info(stock_id)
             # 获取AKShare原始数据 symbol, 'daily', start_date, end_date, adjust
-            start = basic_info.launch_date.strftime('%Y%m%d')
+            # start = basic_info.launch_date.strftime('%Y%m%d')
 
             # 获取AKShare原始数据 symbol, 'daily', start_date, end_date, adjust
             raw_data = akshare.get_stock_data(
@@ -74,11 +81,11 @@ def dig_data():
                     company_id=stock_id,
                     table_name = table_name_td
                 )
-        log.info('一期数据获取结束开始休息！')
-        log.info("休息300秒")
-        time.sleep(300)
+        # log.info('一期数据获取结束开始休息！')
+        # log.info("休息300秒")
+        # time.sleep(300)
 
-def main():
+def updateCycleValue():
     setup_logger()
     ak = AKShareClient()
     db_manager = DBManager()
@@ -99,6 +106,7 @@ def updatePosition():
 
     # 获取最新价格
     df = ak.get_realtime_data('000001')
+    print(df)
 
 def getHoldSituation():
     setup_logger()
@@ -108,8 +116,8 @@ def getHoldSituation():
 
 
 if __name__ == "__main__":
-    dig_data()
-
+    # dig_data()
+    updateCycleValue()
 
 # from celery import Celery
 # app = Celery('tasks', broker='redis://localhost:6379/0')
