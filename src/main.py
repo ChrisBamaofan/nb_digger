@@ -37,8 +37,8 @@ def dig_data():
             
             # time.sleep(3)
             stock_id = stock.stock_id
-            # basic = akshare.get_stock_basic(stock_id)
-            # db_manager.update_basic_info(basic)
+            basic = akshare.get_stock_basic(stock_id)
+            db_manager.update_basic_info(basic)
 
             # 睡眠6秒钟
             time.sleep(4)
@@ -116,8 +116,8 @@ def getHoldSituation():
 
 
 if __name__ == "__main__":
-    # dig_data()
-    updateCycleValue()
+    dig_data()
+    
 
 # from celery import Celery
 # app = Celery('tasks', broker='redis://localhost:6379/0')
