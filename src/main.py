@@ -18,8 +18,8 @@ def dig_data():
 
     # 获取数据时间范围
     # 620的日，621的日，月，季度
-    start = date(2025, 7, 1).strftime('%Y%m%d')
-    end_date = date(2025, 7, 5).strftime('%Y%m%d')
+    start = date(2025, 8, 28).strftime('%Y%m%d')
+    end_date = date(2025, 8, 29).strftime('%Y%m%d')
     
     # 股票列表 (示例)
     # stock_list = [('002336','china.shenzhen')]
@@ -35,14 +35,13 @@ def dig_data():
 
         for stock in stock_list:
             
-            # time.sleep(3)
+            time.sleep(2)
             stock_id = stock.stock_id
             basic = akshare.get_stock_basic(stock_id)
             db_manager.update_basic_info(basic)
 
             # 睡眠6秒钟
-            time.sleep(4)
-            
+            time.sleep(2)
             period_ak = parts[0]
             period_local = parts[1]
             

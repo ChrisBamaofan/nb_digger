@@ -7,6 +7,8 @@ from loguru import logger
 import pandas as pd
 from sqlalchemy import desc  
 from database.models import StockDaily,StockBasicInfo
+from sqlalchemy import text  # 添加这行导入
+
 
 class DBManager:
     def __init__(self):
@@ -73,7 +75,7 @@ class DBManager:
         session=self.Session()
         try:
             # 查询所有数据 todo 再多获取数据 002336
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).order_by(desc(StockBasicInfo.pid)).all()
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).all()
             
             logger.success(stock_daily_list)
             return stock_daily_list
@@ -198,3 +200,48 @@ class DBManager:
             raise
         finally:
             session.close()
+
+    def execute_sql(self,sql):
+        session = self.Session()
+        rows = session.execute(sql)
+
+
+    # 批量更新
+    def execute_bulk_price_adjustment(self, stock_id, adjustment_diff, adjustment_date):
+        
+        sql = text("""
+        UPDATE stock_per_day_final 
+        SET 
+            start_price = start_price + :diff,
+            end_price = end_price + :diff,
+            high_price = high_price + :diff,
+            low_price = low_price + :diff
+        WHERE 
+            stock_id = :stock_id 
+            AND trade_date <= :adjust_date
+            AND scope_type = 'week'
+        """)
+        
+        params = {
+            'diff': adjustment_diff,
+            'stock_id': stock_id,
+            'adjust_date': adjustment_date
+        }
+        
+        try:
+            with self.Session() as session:
+                result = session.execute(
+                    sql,
+                    params
+                )
+                session.commit()
+                affected_rows = result
+                
+                print(f"成功调整股票 {stock_id}: 差值={adjustment_diff}, "
+                      f"截止日期={adjustment_date}, 影响行数={affected_rows}")
+                return affected_rows
+                
+        except Exception as e:
+            print(f"调整股票 {stock_id} 失败: {str(e)}")
+            # 可以在这里添加更详细的错误处理逻辑
+            raise

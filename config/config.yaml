@@ -23,7 +23,7 @@ logging:
   compression: "zip"
 
 tdengine:
-  url: "http://192.168.58.148:6041"
+  url: "http://192.168.45.168:6041"
   port: 6030
   user: "root"
   password: "taosdata"
