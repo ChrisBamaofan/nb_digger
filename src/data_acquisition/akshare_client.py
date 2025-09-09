@@ -105,16 +105,15 @@ class AKShareClient:
     @staticmethod
     def check_delisted_stocks( stock_ids: List[str]) -> List[str]:
         """
-        检查哪些股票已退市
-        :param stock_ids: 股票代码列表
-        :return: 已退市的股票代码列表
+        1 获取当前所有的活跃股票
+        2 
         """
         delisted_stocks = []
         
         for stock_id in stock_ids:
             try:
                 
-                time.sleep(2)
+                time.sleep(1)
                 stock_info = ak.stock_individual_info_em(symbol=stock_id)
                 total_share = stock_info.loc[stock_info["item"] == "总股本", "value"].values[0]
                 

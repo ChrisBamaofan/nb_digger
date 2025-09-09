@@ -18,8 +18,8 @@ def dig_data():
 
     # 获取数据时间范围
     # 620的日，621的日，月，季度
-    start = date(2025, 8, 28).strftime('%Y%m%d')
-    end_date = date(2025, 8, 29).strftime('%Y%m%d')
+    start = date(2025, 9, 4).strftime('%Y%m%d')
+    end_date = date(2025, 9, 5).strftime('%Y%m%d')
     
     # 股票列表 (示例)
     # stock_list = [('002336','china.shenzhen')]
@@ -113,10 +113,23 @@ def getHoldSituation():
     stock_ggcg_em_df = ak.getHold("600986")
     print(stock_ggcg_em_df)
 
+def updateRetiredStocks():
+    setup_logger()
+    ak = AKShareClient()
+    db_manager = DBManager()
+
+    stock_list = db_manager.get_stock_id_list()
+    stock_id_list = [stock.getStockId() for stock in stock_list if stock.getStockId() is not None]
+
+    retired_list = ak.check_delisted_stocks(stock_id_list)
+    #db_manager.update_basic_info
+    print(retired_list)
+    
+    
 
 if __name__ == "__main__":
-    dig_data()
-    
+    # dig_data()
+    updateRetiredStocks()
 
 # from celery import Celery
 # app = Celery('tasks', broker='redis://localhost:6379/0')
