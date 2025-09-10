@@ -77,7 +77,7 @@ class DBManager:
             # 查询所有数据 todo 再多获取数据 002336
             stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).all()
             
-            logger.success(stock_daily_list)
+            logger.success(stock_daily_list.__len__)
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取日线数据列表失败: {e}")

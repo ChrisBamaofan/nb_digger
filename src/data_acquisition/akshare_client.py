@@ -112,8 +112,6 @@ class AKShareClient:
         
         for stock_id in stock_ids:
             try:
-                
-                time.sleep(1)
                 stock_info = ak.stock_individual_info_em(symbol=stock_id)
                 total_share = stock_info.loc[stock_info["item"] == "总股本", "value"].values[0]
                 
@@ -126,6 +124,33 @@ class AKShareClient:
         
         return delisted_stocks
     
+    def check_new_stocks(stock_ids: List[str]) -> List[str]:
+        new_stocks = []
+        try:
+            stock_list = ak.stock_info_a_code_name()
+            all_active_stocks = stock_list['code'].tolist()
+            
+            print(f"数据库中已有股票数量: {len(stock_ids)}")
+            print(f"当前活跃股票数量: {len(all_active_stocks)}")
+            
+            for stock_code in all_active_stocks:
+                if stock_code not in stock_ids:
+                    try:
+                        stock_info = ak.stock_individual_info_em(symbol=stock_code)
+                        if not stock_info.empty:
+                            new_stocks.append(stock_code)
+                            print(f"发现新股票: {stock_code}")
+                    except Exception as e:
+                        print(f"验证股票 {stock_code} 时出错: {e}")
+        
+        except Exception as e:
+            print(f"获取股票列表时出错: {e}")
+            return []
+        
+        print(f"发现 {len(new_stocks)} 只新股票")
+        return new_stocks
+
+
     def get_stock_basic(self,stock_id:str) ->  Optional[pd.DataFrame]:
         df = ak.stock_individual_info_em(symbol=stock_id)
         
@@ -149,3 +174,5 @@ class AKShareClient:
 
     def getHold(self,stock_id:str) :
         return ak.stock_ggcg_em(symbol="股东减持")
+    
+

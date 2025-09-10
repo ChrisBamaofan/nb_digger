@@ -113,31 +113,23 @@ def getHoldSituation():
     stock_ggcg_em_df = ak.getHold("600986")
     print(stock_ggcg_em_df)
 
+# 更新已经退市的股票信息为 1
 def updateRetiredStocks():
     setup_logger()
     ak = AKShareClient()
     db_manager = DBManager()
 
     stock_list = db_manager.get_stock_id_list()
-    stock_id_list = [stock.getStockId() for stock in stock_list if stock.getStockId() is not None]
-
-    retired_list = ak.check_delisted_stocks(stock_id_list)
+    stock_id_list = [stock.stock_id for stock in stock_list if stock.stock_id is not None]
+    print(stock_id_list)
+    ak = AKShareClient()
+    #stockL = ['000023']
+    retired_list = ak.check_new_stocks(stock_id_list)
     #db_manager.update_basic_info
     print(retired_list)
     
     
 
 if __name__ == "__main__":
-    # dig_data()
-    updateRetiredStocks()
-
-# from celery import Celery
-# app = Celery('tasks', broker='redis://localhost:6379/0')
-
-# @app.task
-# def update_profit():
-#     stocks = Position.objects.distinct('stock_code')
-#     prices = get_batch_prices(stocks)
-#     for pos in Position.objects.all():
-#         pos.profit = (prices[pos.stock_code] - pos.cost_price) * pos.quantity
-#         pos.save()
+    dig_data()
+    # updateRetiredStocks()
