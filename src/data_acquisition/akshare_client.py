@@ -124,7 +124,7 @@ class AKShareClient:
         
         return delisted_stocks
     
-    def check_new_stocks(stock_ids: List[str]) -> List[str]:
+    def check_new_stocks(self,stock_ids: List[str]) -> List[str]:
         new_stocks = []
         try:
             stock_list = ak.stock_info_a_code_name()

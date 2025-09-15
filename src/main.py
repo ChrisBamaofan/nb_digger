@@ -124,12 +124,23 @@ def updateRetiredStocks():
     print(stock_id_list)
     ak = AKShareClient()
     #stockL = ['000023']
-    retired_list = ak.check_new_stocks(stock_id_list)
-    #db_manager.update_basic_info
+    retired_list = ak.check_delisted_stocks(stock_id_list)
     print(retired_list)
     
+def updateNewStocks():
+    setup_logger()
+    ak = AKShareClient()
+    db_manager = DBManager()
+    stock_list = db_manager.get_stock_id_list()
+    stock_id_list = [stock.stock_id for stock in stock_list if stock.stock_id is not None]
+    
+    new_list = ak.check_new_stocks(stock_id_list)
+    for stock in new_list:
+        stock_ob = {'stock_id':stock}
+        db_manager.update_basic_info(stock_ob)
     
 
 if __name__ == "__main__":
-    dig_data()
+    # dig_data()
     # updateRetiredStocks()
+    updateNewStocks()

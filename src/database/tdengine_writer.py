@@ -138,4 +138,4 @@ class TDEngineWriter:
 
 
     
-TDEngineWriter.execute_bulk_price_adjustment('000858','week_000858',1,'20250711')
+# TDEngineWriter.execute_bulk_price_adjustment('000858','week_000858',1,'20250711')

@@ -45,6 +45,7 @@ class StockBasicInfo(Base):
     total_stock = Column(Numeric(16, 2), nullable=False, default=0.0, comment='总股本')
     industry = Column(String(100), nullable=True, comment='行业')
     is_retired = Column(Boolean,nullable=False, default=0.0, comment='是否退市')
+    is_new = Column(Boolean,nullable=False, default=0.0, comment='是否新上市')
 
     
     __table_args__ = (
