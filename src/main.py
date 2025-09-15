@@ -18,8 +18,8 @@ def dig_data():
 
     # 获取数据时间范围
     # 620的日，621的日，月，季度
-    start = date(2025, 9, 4).strftime('%Y%m%d')
-    end_date = date(2025, 9, 5).strftime('%Y%m%d')
+    start = date(2025, 9, 12).strftime('%Y%m%d')
+    end_date = date(2025, 9, 13).strftime('%Y%m%d')
     
     # 股票列表 (示例)
     # stock_list = [('002336','china.shenzhen')]
