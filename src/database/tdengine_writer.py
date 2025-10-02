@@ -5,6 +5,7 @@ from typing import List, Dict
 from .tdengine_connector import tdengine
 from utils.logger import log
 from utils.date_utils import date_utils
+from utils.finance_util import map_tushare_to_xueqiu,generate_report_name
 
 class TDEngineWriter:
 
@@ -135,7 +136,64 @@ class TDEngineWriter:
         except Exception as e:
             log.error(f"更新表 {table_name} 失败: {str(e)}")
             raise
-
-
+        
+    @staticmethod
+    def insert_tushare(tushare_data):
+        # 映射到雪球结构
+        for _, row in tushare_data.iterrows():
+            xueqiu_mapped_data = map_tushare_to_xueqiu(row)
+            
+            # 写入TDengine
+            
+            tdengine.execute(f"""
+                INSERT INTO income_statement_{xueqiu_mapped_data['company_id']} 
+                
+                VALUES (
+                    '{xueqiu_mapped_data['ts']}', 
+                    '{xueqiu_mapped_data['report_name']}',
+                    {xueqiu_mapped_data['ctime']},
+                    {xueqiu_mapped_data['net_profit'] or 'NULL'},
+                    {xueqiu_mapped_data['net_profit_atsopc'] or 'NULL'},
+                    {xueqiu_mapped_data['total_revenue'] or 'NULL'},
+                    {xueqiu_mapped_data['op'] or 'NULL'},
+                    {xueqiu_mapped_data['income_from_chg_in_fv'] or 'NULL'},
+                    {xueqiu_mapped_data['invest_incomes_from_rr'] or 'NULL'},
+                    {xueqiu_mapped_data['invest_income'] or 'NULL'},
+                    {xueqiu_mapped_data['exchg_gain'] or 'NULL'},
+                    {xueqiu_mapped_data['operating_taxes_and_surcharge'] or 'NULL'},
+                    {xueqiu_mapped_data['asset_impairment_loss'] or 'NULL'},
+                    {xueqiu_mapped_data['non_operating_income'] or 'NULL'},
+                    {xueqiu_mapped_data['non_operating_payout'] or 'NULL'},
+                    {xueqiu_mapped_data['profit_total_amt'] or 'NULL'},
+                    {xueqiu_mapped_data['minority_gal'] or 'NULL'},
+                    {xueqiu_mapped_data['basic_eps'] or 'NULL'},
+                    {xueqiu_mapped_data['dlt_earnings_per_share'] or 'NULL'},
+                    {xueqiu_mapped_data['othr_compre_income_atoopc'] or 'NULL'},
+                    {xueqiu_mapped_data['othr_compre_income_atms'] or 'NULL'},
+                    {xueqiu_mapped_data['total_compre_income'] or 'NULL'},
+                    {xueqiu_mapped_data['total_compre_income_atsopc'] or 'NULL'},
+                    {xueqiu_mapped_data['total_compre_income_atms'] or 'NULL'},
+                    {xueqiu_mapped_data['othr_compre_income'] or 'NULL'},
+                    {xueqiu_mapped_data['net_profit_after_nrgal_atsolc'] or 'NULL'},
+                    {xueqiu_mapped_data['income_tax_expenses'] or 'NULL'},
+                    {xueqiu_mapped_data['credit_impairment_loss'] or 'NULL'},
+                    {xueqiu_mapped_data['revenue'] or 'NULL'},
+                    {xueqiu_mapped_data['operating_costs'] or 'NULL'},
+                    {xueqiu_mapped_data['operating_cost'] or 'NULL'},
+                    {xueqiu_mapped_data['sales_fee'] or 'NULL'},
+                    {xueqiu_mapped_data['manage_fee'] or 'NULL'},
+                    {xueqiu_mapped_data['financing_expenses'] or 'NULL'},
+                    {xueqiu_mapped_data['rad_cost'] or 'NULL'},
+                    {xueqiu_mapped_data['finance_cost_interest_fee'] or 'NULL'},
+                    {xueqiu_mapped_data['finance_cost_interest_income'] or 'NULL'},
+                    {xueqiu_mapped_data['asset_disposal_income'] or 'NULL'},
+                    {xueqiu_mapped_data['other_income'] or 'NULL'},
+                    {xueqiu_mapped_data['noncurrent_assets_dispose_gain'] or 'NULL'},
+                    {xueqiu_mapped_data['noncurrent_asset_disposal_loss'] or 'NULL'},
+                    {xueqiu_mapped_data['net_profit_bi'] or 'NULL'},
+                    {xueqiu_mapped_data['continous_operating_np'] or 'NULL'},
+                    {xueqiu_mapped_data['create_time']}
+                )
+            """)
     
 # TDEngineWriter.execute_bulk_price_adjustment('000858','week_000858',1,'20250711')

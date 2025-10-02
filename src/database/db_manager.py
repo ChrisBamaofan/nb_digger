@@ -75,12 +75,40 @@ class DBManager:
         session=self.Session()
         try:
             # 查询所有数据 todo 再多获取数据 002336
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0 ).all()
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).all()
             
-            logger.success(stock_daily_list.__len__)
+            # logger.success(stock_daily_list.__len__)
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取日线数据列表失败: {e}")
+            raise
+        finally:
+            session.close()
+
+    from sqlalchemy import text
+
+    def get_stock_id_list_point(self) -> List[StockBasicInfo]:
+        """获取需要处理的股票列表"""
+        session = self.Session()
+        try:
+            sql = """
+            SELECT sbi.* FROM stock_basic_info sbi
+            WHERE sbi.is_retired = 0 
+            AND sbi.stock_id NOT IN (
+                SELECT spdf.stock_id FROM stock_per_day_final spdf
+                WHERE spdf.scope_type = 'week' 
+                AND spdf.trade_date = '2025-09-26 00:00:00'
+            )
+            order by sbi.stock_id asc
+            """
+            
+            # 使用from_statement方法直接映射到模型
+            stock_list = session.query(StockBasicInfo).from_statement(text(sql)).all()
+            
+            return stock_list
+            
+        except Exception as e:
+            logger.error(f"获取股票列表失败: {e}")
             raise
         finally:
             session.close()
@@ -245,3 +273,28 @@ class DBManager:
             print(f"调整股票 {stock_id} 失败: {str(e)}")
             # 可以在这里添加更详细的错误处理逻辑
             raise
+
+    @staticmethod
+    def convert_to_db_format_tushare(stockId:str,tushare_data: pd.DataFrame, period: str) -> pd.DataFrame:
+        """
+        将Tushare数据转换为数据库表字段格式
+        """
+        if tushare_data.empty:
+            return pd.DataFrame()
+        
+        # Tushare数据字段映射:cite[9]
+        return pd.DataFrame({
+            'stock_id': stockId,
+            'trade_date': tushare_data['trade_date'],
+            'amount': tushare_data['amount'],
+            'volume': tushare_data['vol'],  # 注意字段名差异
+            'start_price': tushare_data['open'],
+            'end_price': tushare_data['close'],
+            'high_price': tushare_data['high'],
+            'low_price': tushare_data['low'],
+            'change_price': tushare_data.get('change', 0),  # 涨跌额
+            'change_percent': tushare_data.get('pct_chg', 0),  # 涨跌幅
+            'turnover_ratio': tushare_data.get('turnover_rate', 0),  # 换手率
+            'scope_type': period,
+            'create_user': 'system'
+        })
