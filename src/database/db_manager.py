@@ -7,8 +7,7 @@ from loguru import logger
 import pandas as pd
 from sqlalchemy import desc  
 from database.models import StockDaily,StockBasicInfo
-from sqlalchemy import text  # 添加这行导入
-
+from sqlalchemy import text
 
 class DBManager:
     def __init__(self):
@@ -23,12 +22,7 @@ class DBManager:
             max_overflow=config['max_overflow']
         )
         self.Session = sessionmaker(bind=self.engine)
-        
-    # def init_db(self):
-    #     """初始化数据库表"""
-    #     Base.metadata.create_all(self.engine)
-    #     logger.info("数据库表初始化完成")
-    
+
     def save_data(self, data_df, model_class):
         """保存数据到数据库"""
         session = self.Session()
@@ -71,13 +65,9 @@ class DBManager:
             session.close()
 
     def get_stock_id_list(self)  -> List[StockBasicInfo] :
-        """获取stock_per_day_final表中的所有数据"""
         session=self.Session()
         try:
-            # 查询所有数据 todo 再多获取数据 002336
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).all()
-            
-            # logger.success(stock_daily_list.__len__)
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.is_new == 0,StockBasicInfo.pid>=1075).all()
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取日线数据列表失败: {e}")
@@ -85,7 +75,6 @@ class DBManager:
         finally:
             session.close()
 
-    from sqlalchemy import text
 
     def get_stock_id_list_point(self) -> List[StockBasicInfo]:
         """获取需要处理的股票列表"""
@@ -214,6 +203,16 @@ class DBManager:
                 existing.total_stock = basic_df['total_stock']
                 existing.industry = basic_df['industry']
                 existing.launch_date = basic_df['launch_date']
+                existing.is_retired = 0
+                existing.fullname = basic_df['fullname']
+                existing.enname = basic_df['enname']
+                existing.cnspell = basic_df['cnspell']
+                existing.market = basic_df['market']
+                existing.is_hs = basic_df['is_hs']
+                existing.curr_type = basic_df['curr_type']
+                existing.delist_date = basic_df['delist_date']
+                existing.act_name = basic_df['act_name']
+                existing.act_ent_type = basic_df['act_ent_type']
                 
             else:
                 session.add(StockBasicInfo(**basic_df))

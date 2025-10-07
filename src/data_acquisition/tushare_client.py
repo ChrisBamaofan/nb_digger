@@ -1,19 +1,19 @@
 import tushare as ts
 import pandas as pd
-from typing import Optional, Literal
+from typing import List, Optional, Literal
+import utils.config_loader as cfg
 import logging
-
+from database.db_manager import DBManager
+import time
 
 logger = logging.getLogger(__name__)
 
 class TushareService:
-    def __init__(self, token: str):
-        """
-        初始化Tushare客户端
-        :param token: Tushare token，需要在https://tushare.pro注册获取
-        """
-        self.token = token
-        ts.set_token(token)
+    def __init__(self):
+        config = cfg.get_tushare()
+        print("Loaded DB config:", config)
+        self.token = config['api_key']
+        ts.set_token(self.token)
         self.pro = ts.pro_api()
     
     def get_stock_data(
@@ -137,6 +137,159 @@ class TushareService:
         
         df = self.pro.income(ts_code=stock_id, start_date=start_time, end_date=end_time, fields=fields)
         # 方法1：临时设置显示选项
+        # with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
+            # print(df)
+        return df
+    
+    def get_balanceSheet(self,stock_id:str,start_time,end_time):
+        fields = ''
+        
+        df = self.pro.balancesheet(ts_code=stock_id, start_date=start_time, end_date=end_time, fields=fields)
+        # 方法1：临时设置显示选项
         with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
             print(df)
         return df
+    
+    @staticmethod
+    def convert_stock_id(stock_id,location):
+        localtionMap = {
+                'china.shenzhen': 'SZ',
+                'china.shanghai': 'SH', 
+                'china.beijing': 'BJ'
+            }
+        newStockId = stock_id.lower()+"."+localtionMap[location]
+        return newStockId
+    
+    @staticmethod
+    def convert_to_basic_stock_id(full_stock_id):
+        """推荐使用的方法"""
+        if full_stock_id and '.' in full_stock_id:
+            return full_stock_id.rsplit('.', 1)[0]
+        return full_stock_id
+    
+    def check_new_stocks(self, stock_id_list: List[str]) -> List[str]:
+        try:
+            tushare_stocks_df = self.pro.stock_basic(
+                exchange='', 
+                list_status='L', 
+                fields='ts_code,symbol,name,area,industry,fullname,enname,cnspell,market,exchange,curr_type,list_status,list_date,delist_date,is_hs,act_name,act_ent_type'
+            )
+            
+            tushare_stock_ids = tushare_stocks_df['ts_code'].tolist()
+            
+            # 两个 list 去重
+            existing_stocks_set = set(stock_id_list)
+            tushare_stocks_set = set(tushare_stock_ids)
+            # 两个 list的 元素 求差集
+            new_stocks = list(tushare_stocks_set - existing_stocks_set)
+            
+            # 4. 输出统计信息
+            print(f"Tushare上市股票数量: {len(tushare_stock_ids)}")
+            print(f"数据库已有股票数量: {len(stock_id_list)}")
+            print(f"新增股票数量: {len(new_stocks)}")
+            
+            # 5. 过滤出新股票
+            new_stocks_df = tushare_stocks_df[tushare_stocks_df['ts_code'].isin(new_stocks)]
+            inserted_count = 0
+            for _, stock_row in new_stocks_df.iterrows():
+                try:
+                    # 映射Tushare数据到数据库表结构
+                    mapped_data = self.map_tushare_to_stock_basic(stock_row)
+                    
+                    
+                    db = DBManager()
+                    db.update_basic_info(mapped_data)
+                    
+                    inserted_count += 1
+                    
+                    print(f"已插入: {mapped_data['stock_id']} - {mapped_data['stock_name']}")
+                    
+                except Exception as e:
+                    logger.error(f"插入股票 {stock_row['ts_code']} 失败: {e}")
+                    continue
+            
+            
+            return new_stocks
+            
+        except Exception as e:
+            logger.error(f"检查新增股票失败: {e}")
+            return []
+        
+
+    def map_tushare_to_stock_basic(self,tushare_data):
+        mapping = {
+            'stock_name': 'name',                    # 股票名称
+            'stock_id': 'ts_code',                   # 股票代码
+            'location': 'exchange',                  # 交易所
+            'market': 'market',                  # 交易所
+            'launch_date': 'list_date',              # 上市日期
+            'industry': 'industry',                  # 行业
+            'is_retired': 'list_status',             # 退市标志
+            'fullname': 'fullname',                  # 股票全称
+            'enname': 'enname',                      # 英文全称
+            'cnspell': 'cnspell',                    # 拼音缩写
+            'is_hs': 'is_hs',                        # 退市标志
+            'curr_type': 'curr_type',                # 交易货币
+            'delist_date': 'delist_date',            # 交易货币
+            'act_name': 'act_name',                  # 交易货币
+            'act_ent_type': 'act_ent_type',          # 交易货币
+            
+        }
+        
+        mapped_data = {}
+        for target_field, source_field in mapping.items():
+            mapped_data[target_field] = tushare_data.get(source_field)
+        
+        exchange_map = {
+            'SSE': 'china.shanghai',
+            'SZSE': 'china.shenzhen',
+            'BSE': 'china.beijing'
+        }
+        exchange = tushare_data.get('exchange', '')
+        mapped_data['location'] = exchange_map.get(exchange, exchange)
+        
+        # 2. 退市标志映射
+        list_status = tushare_data.get('list_status', 'L')
+        mapped_data['is_retired'] = 1 if list_status in ['D', 'P'] else 0
+        
+        # 3. 上市日期格式转换
+        list_date = tushare_data.get('list_date')
+        if list_date:
+            mapped_data['launch_date'] = pd.to_datetime(list_date)
+        
+        delist_date = tushare_data.get('delist_date')
+        if delist_date:
+            mapped_data['delist_date'] = pd.to_datetime(delist_date)
+            
+        # 4. 设置默认值 https://tushare.pro/document/2?doc_id=32
+        time.sleep(0.301)
+        stock_id = mapped_data['stock_id']
+        trade_basic = self.pro.daily_basic(ts_code= stock_id, trade_date='20250930', fields='ts_code,trade_date,turnover_rate,volume_ratio,total_mv,circ_mv,total_share,float_share')
+        
+        mapped_data.update({
+            'circulating_market_value': self.get_numeric_value(trade_basic,'circ_mv',0.0) * 10000,
+            'total_market_value': self.get_numeric_value(trade_basic,'total_mv',0.0) * 10000,
+            'circulating_stock': self.get_numeric_value(trade_basic,'float_share',0.0) * 10000,
+            'total_stock': self.get_numeric_value(trade_basic,'total_share',0.0) * 10000,
+            'create_user': 'tushare_sync',
+            'is_new': 1
+        })
+        stock_id = self.convert_to_basic_stock_id(stock_id)
+        mapped_data.update({
+            'stock_id': stock_id         
+        })
+        return mapped_data
+    
+    # 处理数值字段，确保是具体的数值而不是Series
+    @staticmethod
+    def get_numeric_value(data, key, default=0.0):
+        value = data.get(key)
+        if hasattr(value, 'item'):  # 如果是numpy类型
+            return float(value.item())
+        elif value is None:
+            return default
+        else:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default

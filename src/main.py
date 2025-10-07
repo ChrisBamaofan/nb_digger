@@ -6,6 +6,7 @@ from datetime import date
 from database.tdengine_writer import TDEngineWriter
 import time
 import dig_data
+import database.tdengine_connector
 
 import akshare as ak
 
@@ -13,7 +14,6 @@ def updateCycleValue():
     setup_logger()
     ak = AKShareClient()
     db_manager = DBManager()
-
 
     stock_list = db_manager.get_stock_id_list()
     for stock in stock_list:
@@ -51,21 +51,28 @@ def updateRetiredStocks():
     #stockL = ['000023']
     retired_list = ak.check_delisted_stocks(stock_id_list)
     print(retired_list)
-    
+
+# 新股上市
 def updateNewStocks():
     setup_logger()
-    ak = AKShareClient()
+    ts = TushareService()
     db_manager = DBManager()
     stock_list = db_manager.get_stock_id_list()
-    stock_id_list = [stock.stock_id for stock in stock_list if stock.stock_id is not None]
+    # 获取当前数据库中已有的A股股票id列表
+    stock_id_list = [
+        ts.convert_stock_id(stock.stock_id, stock.location) 
+        for stock in stock_list 
+        if stock.stock_id is not None and stock.location is not None
+    ]
+    # 从tushare获取当前上市的A股股票列表
+    new_list = ts.check_new_stocks(stock_id_list)
     
-    new_list = ak.check_new_stocks(stock_id_list)
-    for stock in new_list:
-        stock_ob = {'stock_id':stock}
-        db_manager.update_basic_info(stock_ob)
     
 
 if __name__ == "__main__":
-    dig_data.dig_income_statment()
+    # dig_data.dig_income_statment()
+    # dig_data.dig_income_statment_yoy()
+    dig_data.dig_balance_sheet()
+    
     # updateRetiredStocks()
     # updateNewStocks()

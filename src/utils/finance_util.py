@@ -1,3 +1,5 @@
+import pandas as pd
+
 def map_tushare_to_xueqiu(tushare_data):
     """将Tushare利润表数据映射到雪球表结构"""
     
@@ -10,7 +12,7 @@ def map_tushare_to_xueqiu(tushare_data):
         
         # 核心利润指标
         'net_profit': 'n_income',                          # 净利润
-        'net_profit_atsopc': 'n_income_attr_p',           # 归属于母公司股东的净利润
+        'net_profit_atsopc': 'n_income_attr_p',           # 归属于母公司股东的净利润  111765299.46
         'total_revenue': 'total_revenue',                  # 营业总收入
         'op': 'operate_profit',                           # 营业利润
         'income_from_chg_in_fv': 'fv_value_chg_gain',     # 公允价值变动收益
@@ -22,7 +24,7 @@ def map_tushare_to_xueqiu(tushare_data):
         'non_operating_income': 'non_oper_income',        # 营业外收入
         'non_operating_payout': 'non_oper_exp',           # 营业外支出
         'profit_total_amt': 'total_profit',               # 利润总额
-        'minority_gal': 'minority_gain',                  # 少数股东损益
+        'minority_gal': 'minority_gain',                  # 少数股东损益     3695819.76
         'basic_eps': 'basic_eps',                         # 基本每股收益
         'dlt_earnings_per_share': 'diluted_eps',          # 稀释每股收益
         

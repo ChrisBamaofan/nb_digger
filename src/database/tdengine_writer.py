@@ -6,6 +6,7 @@ from .tdengine_connector import tdengine
 from utils.logger import log
 from utils.date_utils import date_utils
 from utils.finance_util import map_tushare_to_xueqiu,generate_report_name
+from finance_report.income_statement_yoy import IncomeStatementYOYCalculator
 
 class TDEngineWriter:
 
@@ -55,24 +56,27 @@ class TDEngineWriter:
             return False
     
     @staticmethod
-    def create_dynamic_table(db:str,company_id: str, location:str, scope:str ,table_name:str,stable:str ):
-        """
-        为指定公司创建动态日线表(如果不存在)
-        :param company_id: 公司ID (如: 000001)
-        """
+    def create_dynamic_table(db:str,company_id: str, location:str, scope:str ,table_name:str,stable:str ,fin:bool):
         values = []
         values.append(location)
         values.append(company_id)
         values.append(scope)
 
         try:
-            formatted_sql = f"""
-            CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} TAGS (
-                '{values[0]}', '{values[1]}', '{values[2]}'
-            )
-            """.strip().replace('\n', ' ')
+            if fin:
+                formatted_sql = f"""
+                CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} (`company_id`, `location`)  TAGS (
+                    '{company_id}', '{location}'
+                )
+                """.strip().replace('\n', ' ')
+            else:
+                formatted_sql = f"""
+                CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} TAGS (
+                    '{values[0]}', '{values[1]}', '{values[2]}'
+                )
+                """.strip().replace('\n', ' ')
             
-            # log.info(f"Executing SQL:\n{formatted_sql}")
+            log.info(f"Executing SQL:\n{formatted_sql}")
             
             tdengine.execute(formatted_sql)
             # log.info(f"TDEngine动态表 {db}.{table_name} 已创建/确认存在")
@@ -81,6 +85,8 @@ class TDEngineWriter:
             log.error(f"TDEngine表创建失败: {e}")
             return False
 
+    
+        
     @staticmethod
     def execute_bulk_price_adjustment(stock_id: str, table_name:str,adjustment_diff: float, adjustment_date: str):
         
@@ -136,20 +142,19 @@ class TDEngineWriter:
         except Exception as e:
             log.error(f"更新表 {table_name} 失败: {str(e)}")
             raise
-        
+
     @staticmethod
-    def insert_tushare(tushare_data):
+    def insert_income_statement(tushare_data,stock_id:str):
+        
         # 映射到雪球结构
         for _, row in tushare_data.iterrows():
             xueqiu_mapped_data = map_tushare_to_xueqiu(row)
-            
+            utc_ts = tdengine._convert_to_utc2(xueqiu_mapped_data['ts'])
             # 写入TDengine
-            
-            tdengine.execute(f"""
-                INSERT INTO income_statement_{xueqiu_mapped_data['company_id']} 
-                
+            sql =f"""
+                INSERT INTO is_{stock_id}
                 VALUES (
-                    '{xueqiu_mapped_data['ts']}', 
+                    '{utc_ts}', 
                     '{xueqiu_mapped_data['report_name']}',
                     {xueqiu_mapped_data['ctime']},
                     {xueqiu_mapped_data['net_profit'] or 'NULL'},
@@ -192,8 +197,62 @@ class TDEngineWriter:
                     {xueqiu_mapped_data['noncurrent_asset_disposal_loss'] or 'NULL'},
                     {xueqiu_mapped_data['net_profit_bi'] or 'NULL'},
                     {xueqiu_mapped_data['continous_operating_np'] or 'NULL'},
-                    {xueqiu_mapped_data['create_time']}
+                    NOW,
+                    {xueqiu_mapped_data['int_income'] or 'NULL'},
+                    {xueqiu_mapped_data['prem_earned'] or 'NULL'},
+                    {xueqiu_mapped_data['comm_income'] or 'NULL'},
+                    {xueqiu_mapped_data['n_commis_income'] or 'NULL'},
+                    {xueqiu_mapped_data['prem_income'] or 'NULL'},
+                    {xueqiu_mapped_data['n_sec_tb_income'] or 'NULL'},
+                    {xueqiu_mapped_data['n_sec_uw_income'] or 'NULL'},
+                    {xueqiu_mapped_data['ebit'] or 'NULL'},
+                    {xueqiu_mapped_data['ebitda'] or 'NULL'},
+                    {xueqiu_mapped_data['comp_type'] or 'NULL'}
                 )
-            """)
+            """
+            tdengine.execute(sql)
+            TDEngineWriter.insert_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+
+    @staticmethod
+    def insert_income_statement_yoy(stock_id,xueqiu_mapped_data):
+        # yoy
+        calculator = IncomeStatementYOYCalculator()
+        # 计算 yoy
+        previous_data = calculator.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'])
+        
+        if previous_data:
+            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id)
+            
+            TDEngineWriter._insert_income_statement_yoy(yoy_data=yoy_data,stock_id=stock_id)
+        else:
+            print(f"无法计算增长率，缺少去年同期数据: {stock_id} {xueqiu_mapped_data['ts']}")
     
+
+    # insert yoy to tdengine
+    @staticmethod
+    def _insert_income_statement_yoy(yoy_data: Dict,stock_id:str):
+        """写入增长率数据"""
+        fields = []
+        values = []
+        
+        for field, value in yoy_data.items():
+            fields.append(field)
+            if value is not None:
+                # 字符串和时间戳需要加引号
+                if isinstance(value, (str, pd.Timestamp)):
+                    values.append(f"'{value}'")
+                else:
+                    values.append(str(value))
+            else:
+                values.append('NULL')
+        
+        # 构建完整的INSERT语句，包含字段名
+        sql = f"""
+            INSERT INTO is_yoy_{stock_id} 
+            ({', '.join(fields)})
+            VALUES ({', '.join(values)})
+        """
+        
+        print(f"执行的SQL: {sql}")  # 调试用
+        tdengine.execute(sql)
 # TDEngineWriter.execute_bulk_price_adjustment('000858','week_000858',1,'20250711')
