@@ -1,0 +1,22 @@
+
+1   财报换 api                         
+    balance_sheet                  10/8完成
+    balance_sheet_yoy               10/9完成
+    cash_flow_statement             10/10
+    cash_flow_statement_yoy          10/11
+
+2   港股 
+    股票列表及周线信息              10/12
+
+3   美股 引入
+4   退市及st股票的列表              done
+5   新股                            1/2
+    获取该历史股价，历史财报数据，（仅获取最新的财报，获取完整的week数据） todo is_new= 1 ,获取从上市到今天的week级别的per_day_final到mysql，获取历史财报数据及同比数据计算。
+6 	减持或增持期间
+7 	监管
+8	概念列表			联系同花顺
+9   perdayfinal tdengine 中因为赋权 导致数据更新较慢，所以已经是脏数据了
+10  估值模型  我有1000w,凭什么你这个策略出来我可以每个票分配100w，或者一个票可以分配30w最多，这些都是由什么因素决定
+
+11 	实时计算根据日来计算周月季年
+12	缓存均线数据到数据库及redis

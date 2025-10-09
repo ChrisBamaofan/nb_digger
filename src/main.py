@@ -1,6 +1,6 @@
-from data_acquisition.akshare_client import AKShareClient
+from datasource.akshare_client import AKShareClient
 from database.db_manager import DBManager
-from data_acquisition.tushare_client import TushareService
+from datasource.tushare_client import TushareService
 from utils.logger import setup_logger,log
 from datetime import date
 from database.tdengine_writer import TDEngineWriter
@@ -70,9 +70,14 @@ def updateNewStocks():
     
 
 if __name__ == "__main__":
+    ts = TushareService()
+    ts.update_basic_get_stock()
     # dig_data.dig_income_statment()
     # dig_data.dig_income_statment_yoy()
     dig_data.dig_balance_sheet()
-    
+    # todo copy balance_sheet
+    dig_data.dig_cash_flow_statement()
+    # 2. HK stock list , basic_info, finance_report,
+    # 3. USA stock list, basic_info, finance_report
     # updateRetiredStocks()
     # updateNewStocks()

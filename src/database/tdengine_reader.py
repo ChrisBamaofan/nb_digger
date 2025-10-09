@@ -40,15 +40,15 @@ class TDEngineReader:
         
         if report_type == 'income_statement':
             t_prefix = 'is'
-        elif report_type == 'balance_sheet':
+        elif report_type == 'balance_sheets':
             t_prefix = 'bs'
-        elif report_type == 'cash_flow_statement':
+        elif report_type == 'cash_flow_statements':
             t_prefix = 'cfs'
         elif report_type == 'income_statement_yoy':
             t_prefix = 'is_yoy'
-        elif report_type == 'balance_sheet_yoy':
+        elif report_type == 'balance_sheets_growth':
             t_prefix = 'bs_yoy'
-        elif report_type == 'cash_flow_statement_yoy':
+        elif report_type == 'cash_flow_statements_growth':
             t_prefix = 'cfs_yoy'
         else:
             return {}

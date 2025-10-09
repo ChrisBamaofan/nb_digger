@@ -67,7 +67,7 @@ class IncomeStatementYOYCalculator:
         
         return (current - previous) / abs(previous)
     
-    def get_previous_period_data(self, stock_id,current_end_date: str) -> Dict:
+    def get_previous_period_data(self, stock_id,current_end_date: str,report_type: str) -> Dict:
         """
         获取去年同期数据
         current_end_date: 当前报告期 (如 '2025-06-30')
@@ -88,7 +88,7 @@ class IncomeStatementYOYCalculator:
         else:
             return {}
         td_reader = TDEngineReader()
-        return td_reader.get_finance_report(stock_id=stock_id,report_date=previous_end_date,report_type='income_statement')
+        return td_reader.get_finance_report(stock_id=stock_id,report_date=previous_end_date,report_type=report_type)
     
     def _result_to_dict(self, result) -> Dict:
         """将查询结果转换为字典"""

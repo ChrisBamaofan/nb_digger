@@ -5,6 +5,10 @@ import utils.config_loader as cfg
 import logging
 from database.db_manager import DBManager
 import time
+from datetime import date
+from utils.logger import setup_logger,log
+from database.tdengine_writer import TDEngineWriter
+from finance_report.balance_sheet import BalanceSheet
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +146,10 @@ class TushareService:
         return df
     
     def get_balanceSheet(self,stock_id:str,start_time,end_time):
-        fields = ''
+        bs = BalanceSheet()
+        
+        tushare_fields  = list(bs.field_mapping.keys())
+        fields = ','.join(tushare_fields)
         
         df = self.pro.balancesheet(ts_code=stock_id, start_date=start_time, end_date=end_time, fields=fields)
         # 方法1：临时设置显示选项
@@ -214,7 +221,97 @@ class TushareService:
         except Exception as e:
             logger.error(f"检查新增股票失败: {e}")
             return []
-        
+    
+    # 1.从tushare获取市值和基本信息  2. 更新week级别的数据
+    def update_basic_get_stock(self) :
+            try:
+                setup_logger()
+                # 1. 从tushare获取所有活跃股票的基本信息
+                tushare_stocks_df = self.pro.stock_basic(
+                    exchange='', 
+                    list_status='L', 
+                    fields='ts_code,symbol,name,area,industry,fullname,enname,cnspell,market,exchange,curr_type,list_status,list_date,delist_date,is_hs,act_name,act_ent_type'
+                )
+                
+                # 2.准备
+                tushare = TushareService()
+                db_manager = DBManager()
+                start_date = date(2025, 9, 29).strftime('%Y%m%d')
+                end_date = date(2025, 9, 30).strftime('%Y%m%d')
+                stock_list = db_manager.get_stock_id_list()
+                print(stock_list)
+                
+                # tushare: daily_day,weekly_week,monthly_month
+                input_str = "weekly_week"
+                items = input_str.split(',')
+
+                for item in items:
+                    
+                    parts = item.split('_')
+
+                    for stock in stock_list:
+                        
+                        time.sleep(2)
+                        stock_id = stock.stock_id
+                        location = stock.location
+                        newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
+                        # 1.获取该 stock_id 的 基本信息并更新到 mysql.stock_basic_info
+                        new_stocks_df = tushare_stocks_df[tushare_stocks_df['ts_code'] ==  newStockId]
+                        inserted_count = 0
+                        for _, stock_row in new_stocks_df.iterrows():
+                            try:
+                                # 映射Tushare数据到数据库表结构
+                                mapped_data = self.map_tushare_to_stock_basic(stock_row)
+                                
+                                
+                                db = DBManager()
+                                db.update_basic_info(mapped_data)
+                                
+                                inserted_count += 1
+                                
+                                print(f"已插入: {mapped_data['stock_id']} - {mapped_data['stock_name']}")
+                                
+                            except Exception as e:
+                                logger.error(f"插入股票 {stock_row['ts_code']} 失败: {e}")
+                                continue
+                        time.sleep(1)
+                        # weekly
+                        period_tu = parts[0]
+                        # week
+                        period_local = parts[1]
+                        
+                        log.info(f"正在处理股票: {stock},{period_local},{period_tu}")
+
+
+                        raw_data = tushare.get_adj_stock_data(
+                            symbol=newStockId,
+                            period = period_tu,
+                            start_date=start_date,
+                            end_date=end_date,
+                            adjust="qfq"
+                        )
+                        
+                        if raw_data is not None:
+                            """同步数据到 mysql"""
+                            db_ready_data = db_manager.convert_to_db_format_tushare(stock_id,raw_data,period_local)
+                            
+                            db_manager.save_daily_data(db_ready_data)
+
+                            """同步数据到TDEngine"""
+                            # 确保表存在
+                            table_name_td = f"{period_local}_{stock_id}"
+                            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False)
+                            
+                            # 批量写入数据
+                            TDEngineWriter.write_daily_data_batch(
+                                data=db_ready_data,
+                                company_id=stock_id,
+                                table_name = table_name_td
+                            )
+                
+            except Exception as e:
+                logger.error(f"检查新增股票失败: {e}")
+                return []
 
     def map_tushare_to_stock_basic(self,tushare_data):
         mapping = {

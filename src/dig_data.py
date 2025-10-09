@@ -1,6 +1,6 @@
-from data_acquisition.akshare_client import AKShareClient
+from datasource.akshare_client import AKShareClient
 from database.db_manager import DBManager
-from data_acquisition.tushare_client import TushareService
+from datasource.tushare_client import TushareService
 from utils.logger import setup_logger,log
 from datetime import date
 from database.tdengine_writer import TDEngineWriter
@@ -82,8 +82,8 @@ def dig_data_tushare():
     tushare = TushareService()
     db_manager = DBManager()
 
-    start_date = date(2025, 9, 25).strftime('%Y%m%d')
-    end_date = date(2025, 9, 26).strftime('%Y%m%d')
+    start_date = date(2025, 9, 29).strftime('%Y%m%d')
+    end_date = date(2025, 9, 30).strftime('%Y%m%d')
     
     stock_list = db_manager.get_stock_id_list()
     print(stock_list)
@@ -101,8 +101,8 @@ def dig_data_tushare():
             time.sleep(2)
             stock_id = stock.stock_id
             location = stock.location
-            basic = akshare.get_stock_basic(stock_id)
-            db_manager.update_basic_info(basic)
+            # basic = akshare.get_stock_basic(stock_id)
+            # db_manager.update_basic_info(basic)
 
             time.sleep(1)
             # weekly
@@ -249,6 +249,7 @@ def dig_income_statment_yoy():
         if xueqiu_current_data:
             TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_current_data)
 
+# 从tushare 获取资产负债表的数据，遍历每个股票，并捞取存入tdengine,
 def dig_balance_sheet():
     setup_logger()
     tushare = TushareService()
@@ -268,8 +269,8 @@ def dig_balance_sheet():
         location = stock.location
         newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
         # 确保表存在 
-        table_name_td = f"is_{stock_id}"
-        TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,'',table_name_td,"balance_sheet",True)
+        table_name_td = f"bs_{stock_id}"
+        TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,'',table_name_td,"balance_sheets",True)
 
         tushare_data = tushare.get_balanceSheet(stock_id = newStockId,start_time=start_date,end_time=end_date)
-        TDEngineWriter.insert_income_statement(tushare_data=tushare_data,stock_id=stock_id)
+        TDEngineWriter.insert_balance_sheet(tushare_data=tushare_data,stock_id=stock_id)
