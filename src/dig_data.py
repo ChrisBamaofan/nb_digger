@@ -273,4 +273,30 @@ def dig_balance_sheet():
         TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,'',table_name_td,"balance_sheets",True)
 
         tushare_data = tushare.get_balanceSheet(stock_id = newStockId,start_time=start_date,end_time=end_date)
-        TDEngineWriter.insert_balance_sheet(tushare_data=tushare_data,stock_id=stock_id)
+        TDEngineWriter.insert_balance_sheet(tushare_data=tushare_data,stock_id=stock_id,location= location)
+
+# 从tushare 获取现金流表的数据，遍历每个股票，并捞取存入tdengine,
+def dig_cash_flow_statement():
+    setup_logger()
+    tushare = TushareService()
+    db_manager = DBManager()
+
+
+    start_date = date(2025, 6, 1).strftime('%Y%m%d')
+    end_date = date(2025, 10, 2).strftime('%Y%m%d')
+    
+    stock_list = db_manager.get_stock_id_list()
+    
+
+    for stock in stock_list:
+        time.sleep(0.301)
+        stock_id = stock.stock_id
+        print(stock_id)
+        location = stock.location
+        newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
+        # 确保表存在
+        table_name_td = f"cfs_{stock_id}"
+        TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,'',table_name_td,"cash_flow_statements",True)
+
+        tushare_data = tushare.get_cashflowstatement(stock_id = newStockId,start_time=start_date,end_time=end_date)
+        TDEngineWriter.insert_cash_flow_statement(tushare_data=tushare_data,stock_id=stock_id)

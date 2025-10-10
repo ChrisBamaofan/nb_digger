@@ -5,7 +5,7 @@ from typing import List, Dict
 from .tdengine_connector import tdengine
 from utils.logger import log
 from utils.date_utils import date_utils
-from utils.finance_util import map_tushare_to_xueqiu,generate_report_name,map_tushare_to_xueqiu_balance
+from utils.finance_util import map_tushare_to_xueqiu,generate_report_name,map_tushare_to_xueqiu_balance,map_tushare_to_xueqiu_cashflowstatment
 from finance_report.income_statement_yoy import IncomeStatementYOYCalculator
 
 class TDEngineWriter:
@@ -241,7 +241,21 @@ class TDEngineWriter:
             TDEngineWriter._insert_income_statement_yoy(yoy_type='bs',yoy_data=yoy_data,stock_id=stock_id)
         else:
             print(f"无法计算增长率，缺少去年同期数据: {stock_id} {xueqiu_mapped_data['ts']}")
+
+    @staticmethod
+    def insert_cash_flow_statement_yoy(stock_id,xueqiu_mapped_data):
+        # yoy
+        calculator = IncomeStatementYOYCalculator()
+        # 计算 yoy
+        previous_data = calculator.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'],report_type='cash_flow_statements')
+        
+        if previous_data:
+            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id)
             
+            TDEngineWriter._insert_income_statement_yoy(yoy_type='cfs',yoy_data=yoy_data,stock_id=stock_id)
+        else:
+            print(f"无法计算增长率，缺少去年同期数据: {stock_id} {xueqiu_mapped_data['ts']}")
+
     # insert yoy to tdengine
     @staticmethod
     def _insert_income_statement_yoy(yoy_type:str,yoy_data: Dict,stock_id:str):
@@ -272,7 +286,7 @@ class TDEngineWriter:
 
 
     @staticmethod
-    def insert_balance_sheet(tushare_data,stock_id):
+    def insert_balance_sheet(tushare_data,stock_id,location):
         # 映射到雪球结构
         for _, row in tushare_data.iterrows():
             xueqiu_mapped_data = map_tushare_to_xueqiu_balance(row)
@@ -402,4 +416,76 @@ class TDEngineWriter:
                 )
             """
             tdengine.execute(sql)
+            
+            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"bs_yoy_{stock_id}","balance_sheets_growth",True)
             TDEngineWriter.insert_balance_sheet_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+
+    
+    @staticmethod
+    def insert_cash_flow_statement(tushare_data,stock_id,location):
+        def format_sql_value(value):
+            if value is None:
+                return 'NULL'
+            elif isinstance(value, str):
+                escaped_value = value.replace("'", "''")
+                return f"'{escaped_value}'"
+            elif isinstance(value, pd.Timestamp):
+                return f"'{value.strftime('%Y-%m-%d %H:%M:%S')}'"
+            else:
+                return str(value)
+        # 映射到雪球结构
+        for _, row in tushare_data.iterrows():
+            data = map_tushare_to_xueqiu_cashflowstatment(row)
+            utc_ts = tdengine._convert_to_utc2(data['ts'])
+            # 写入TDengine
+            sql = f"""
+                INSERT INTO cfs_{stock_id} 
+                VALUES (
+                    {utc_ts},
+                    {format_sql_value(data.get('report_name'))},
+                    {format_sql_value(data.get('ctime'))},
+                    {format_sql_value(data.get('ncf_from_oa'))},
+                    {format_sql_value(data.get('ncf_from_ia'))},
+                    {format_sql_value(data.get('ncf_from_fa'))},
+                    {format_sql_value(data.get('cash_received_of_othr_oa'))},
+                    {format_sql_value(data.get('sub_total_of_ci_from_oa'))},
+                    {format_sql_value(data.get('cash_paid_to_employee_etc'))},
+                    {format_sql_value(data.get('payments_of_all_taxes'))},
+                    {format_sql_value(data.get('othrcash_paid_relating_to_oa'))},
+                    {format_sql_value(data.get('sub_total_of_cos_from_oa'))},
+                    {format_sql_value(data.get('cash_received_of_dspsl_invest'))},
+                    {format_sql_value(data.get('invest_income_cash_received'))},
+                    {format_sql_value(data.get('net_cash_of_disposal_assets'))},
+                    {format_sql_value(data.get('net_cash_of_disposal_branch'))},
+                    {format_sql_value(data.get('cash_received_of_othr_ia'))},
+                    {format_sql_value(data.get('sub_total_of_ci_from_ia'))},
+                    {format_sql_value(data.get('invest_paid_cash'))},
+                    {format_sql_value(data.get('cash_paid_for_assets'))},
+                    {format_sql_value(data.get('othrcash_paid_relating_to_ia'))},
+                    {format_sql_value(data.get('sub_total_of_cos_from_ia'))},
+                    {format_sql_value(data.get('cash_received_of_absorb_invest'))},
+                    {format_sql_value(data.get('cash_received_from_investor'))},
+                    {format_sql_value(data.get('cash_received_from_bond_issue'))},
+                    {format_sql_value(data.get('cash_received_of_borrowing'))},
+                    {format_sql_value(data.get('cash_received_of_othr_fa'))},
+                    {format_sql_value(data.get('sub_total_of_ci_from_fa'))},
+                    {format_sql_value(data.get('cash_pay_for_debt'))},
+                    {format_sql_value(data.get('cash_paid_of_distribution'))},
+                    {format_sql_value(data.get('branch_paid_to_minority_holder'))},
+                    {format_sql_value(data.get('othrcash_paid_relating_to_fa'))},
+                    {format_sql_value(data.get('sub_total_of_cos_from_fa'))},
+                    {format_sql_value(data.get('effect_of_exchange_chg_on_cce'))},
+                    {format_sql_value(data.get('net_increase_in_cce'))},
+                    {format_sql_value(data.get('initial_balance_of_cce'))},
+                    {format_sql_value(data.get('final_balance_of_cce'))},
+                    {format_sql_value(data.get('cash_received_of_sales_service'))},
+                    {format_sql_value(data.get('refund_of_tax_and_levies'))},
+                    {format_sql_value(data.get('goods_buy_and_service_cash_pay'))},
+                    {format_sql_value(data.get('net_cash_amt_from_branch'))},
+                    {format_sql_value(data.get('create_date'))}
+                )
+            """
+            tdengine.execute(sql)
+            
+            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"cfs_yoy_{stock_id}","cash_flow_statements_growth",True)
+            TDEngineWriter.insert_cash_flow_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=data)

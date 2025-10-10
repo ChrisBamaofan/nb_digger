@@ -1,5 +1,6 @@
 import pandas as pd
 from finance_report.balance_sheet import BalanceSheet
+from finance_report.cash_flow_statement import CashFlowStatement
 
 def map_tushare_to_xueqiu(tushare_data):
     """将Tushare利润表数据映射到雪球表结构"""
@@ -176,5 +177,43 @@ def map_tushare_to_xueqiu_balance(tushare_data):
         xueqiu_data['asset_liab_ratio'] = total_liab / total_assets
     else:
         xueqiu_data['asset_liab_ratio'] = None
+    
+    return xueqiu_data
+
+
+def map_tushare_to_xueqiu_cashflowstatment(tushare_data):
+    """将Tushare资产负债表 数据映射到雪球表结构"""
+    cfs = CashFlowStatement()
+    mapping = cfs.field_mapping
+    
+    xueqiu_data = {}
+    
+    # 基础字段映射
+    for tushare_field, xueqiu_field in mapping.items():
+        if tushare_field in tushare_data and pd.notna(tushare_data[tushare_field]):
+            xueqiu_data[xueqiu_field] = tushare_data[tushare_field]
+        else:
+            xueqiu_data[xueqiu_field] = None
+    
+    # 特殊处理字段
+    # 1. 报告名称生成
+    xueqiu_data['report_name'] = generate_report_name(
+        tushare_data.get('end_date'), 
+        tushare_data.get('report_type')
+    )
+    
+    # 2. 时间戳处理
+    if 'end_date' in tushare_data and tushare_data['end_date']:
+        xueqiu_data['ts'] = pd.to_datetime(tushare_data['end_date'])
+    
+    if 'ann_date' in tushare_data and tushare_data['ann_date']:
+        xueqiu_data['ctime'] = int(pd.to_datetime(tushare_data['ann_date']).timestamp() * 1000)
+    
+    # 3. 公司ID
+    xueqiu_data['company_id'] = tushare_data.get('ts_code', '')
+    
+    # 4. 创建时间（使用当前时间）
+    xueqiu_data['create_time'] = pd.Timestamp.now()
+    
     
     return xueqiu_data

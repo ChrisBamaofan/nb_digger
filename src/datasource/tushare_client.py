@@ -9,6 +9,7 @@ from datetime import date
 from utils.logger import setup_logger,log
 from database.tdengine_writer import TDEngineWriter
 from finance_report.balance_sheet import BalanceSheet
+from finance_report.cash_flow_statement import CashFlowStatement
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +158,19 @@ class TushareService:
             print(df)
         return df
     
+    def get_cashflowstatement(self,stock_id:str,start_time,end_time):
+        cfs = CashFlowStatement()
+        
+        tushare_fields  = list(cfs.field_mapping.keys())
+        fields = ','.join(tushare_fields)
+        
+        df = self.pro.cashflow(ts_code=stock_id, start_date=start_time, end_date=end_time, fields=fields)
+        # 方法1：临时设置显示选项
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
+            print(df)
+        return df
+
+
     @staticmethod
     def convert_stock_id(stock_id,location):
         localtionMap = {
