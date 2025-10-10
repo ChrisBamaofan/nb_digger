@@ -5,7 +5,8 @@ from typing import List, Dict
 from .tdengine_connector import tdengine
 from utils.logger import log
 from utils.date_utils import date_utils
-from utils.finance_util import map_tushare_to_xueqiu,generate_report_name
+from utils.finance_util import map_tushare_to_xueqiu,generate_report_name,map_tushare_to_xueqiu_balance,map_tushare_to_xueqiu_cashflowstatment
+from finance_report.income_statement_yoy import IncomeStatementYOYCalculator
 
 class TDEngineWriter:
 
@@ -55,24 +56,27 @@ class TDEngineWriter:
             return False
     
     @staticmethod
-    def create_dynamic_table(db:str,company_id: str, location:str, scope:str ,table_name:str,stable:str ):
-        """
-        为指定公司创建动态日线表(如果不存在)
-        :param company_id: 公司ID (如: 000001)
-        """
+    def create_dynamic_table(db:str,company_id: str, location:str, scope:str ,table_name:str,stable:str ,fin:bool):
         values = []
         values.append(location)
         values.append(company_id)
         values.append(scope)
 
         try:
-            formatted_sql = f"""
-            CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} TAGS (
-                '{values[0]}', '{values[1]}', '{values[2]}'
-            )
-            """.strip().replace('\n', ' ')
+            if fin:
+                formatted_sql = f"""
+                CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} (`company_id`, `location`)  TAGS (
+                    '{company_id}', '{location}'
+                )
+                """.strip().replace('\n', ' ')
+            else:
+                formatted_sql = f"""
+                CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} TAGS (
+                    '{values[0]}', '{values[1]}', '{values[2]}'
+                )
+                """.strip().replace('\n', ' ')
             
-            # log.info(f"Executing SQL:\n{formatted_sql}")
+            log.info(f"Executing SQL:\n{formatted_sql}")
             
             tdengine.execute(formatted_sql)
             # log.info(f"TDEngine动态表 {db}.{table_name} 已创建/确认存在")
@@ -81,6 +85,8 @@ class TDEngineWriter:
             log.error(f"TDEngine表创建失败: {e}")
             return False
 
+    
+        
     @staticmethod
     def execute_bulk_price_adjustment(stock_id: str, table_name:str,adjustment_diff: float, adjustment_date: str):
         
@@ -136,20 +142,19 @@ class TDEngineWriter:
         except Exception as e:
             log.error(f"更新表 {table_name} 失败: {str(e)}")
             raise
-        
+
     @staticmethod
-    def insert_tushare(tushare_data):
+    def insert_income_statement(tushare_data,stock_id:str):
+        
         # 映射到雪球结构
         for _, row in tushare_data.iterrows():
             xueqiu_mapped_data = map_tushare_to_xueqiu(row)
-            
+            utc_ts = tdengine._convert_to_utc2(xueqiu_mapped_data['ts'])
             # 写入TDengine
-            
-            tdengine.execute(f"""
-                INSERT INTO income_statement_{xueqiu_mapped_data['company_id']} 
-                
+            sql =f"""
+                INSERT INTO is_{stock_id}
                 VALUES (
-                    '{xueqiu_mapped_data['ts']}', 
+                    '{utc_ts}', 
                     '{xueqiu_mapped_data['report_name']}',
                     {xueqiu_mapped_data['ctime']},
                     {xueqiu_mapped_data['net_profit'] or 'NULL'},
@@ -192,8 +197,295 @@ class TDEngineWriter:
                     {xueqiu_mapped_data['noncurrent_asset_disposal_loss'] or 'NULL'},
                     {xueqiu_mapped_data['net_profit_bi'] or 'NULL'},
                     {xueqiu_mapped_data['continous_operating_np'] or 'NULL'},
-                    {xueqiu_mapped_data['create_time']}
+                    NOW,
+                    {xueqiu_mapped_data['int_income'] or 'NULL'},
+                    {xueqiu_mapped_data['prem_earned'] or 'NULL'},
+                    {xueqiu_mapped_data['comm_income'] or 'NULL'},
+                    {xueqiu_mapped_data['n_commis_income'] or 'NULL'},
+                    {xueqiu_mapped_data['prem_income'] or 'NULL'},
+                    {xueqiu_mapped_data['n_sec_tb_income'] or 'NULL'},
+                    {xueqiu_mapped_data['n_sec_uw_income'] or 'NULL'},
+                    {xueqiu_mapped_data['ebit'] or 'NULL'},
+                    {xueqiu_mapped_data['ebitda'] or 'NULL'},
+                    {xueqiu_mapped_data['comp_type'] or 'NULL'}
                 )
-            """)
+            """
+            tdengine.execute(sql)
+            TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+
+    @staticmethod
+    def insert_income_statement_yoy(stock_id,xueqiu_mapped_data):
+        # yoy
+        calculator = IncomeStatementYOYCalculator()
+        # 计算 yoy
+        previous_data = calculator.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'],report_type='income_statement')
+        
+        if previous_data:
+            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id)
+            
+            TDEngineWriter._insert_income_statement_yoy(yoy_type='is',yoy_data=yoy_data,stock_id=stock_id)
+        else:
+            print(f"无法计算增长率，缺少去年同期数据: {stock_id} {xueqiu_mapped_data['ts']}")
     
-# TDEngineWriter.execute_bulk_price_adjustment('000858','week_000858',1,'20250711')
+
+    @staticmethod
+    def insert_balance_sheet_yoy(stock_id,xueqiu_mapped_data):
+        # yoy
+        calculator = IncomeStatementYOYCalculator()
+        # 计算 yoy
+        previous_data = calculator.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'],report_type='balance_sheets')
+        
+        if previous_data:
+            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id)
+            
+            TDEngineWriter._insert_income_statement_yoy(yoy_type='bs',yoy_data=yoy_data,stock_id=stock_id)
+        else:
+            print(f"无法计算增长率，缺少去年同期数据: {stock_id} {xueqiu_mapped_data['ts']}")
+
+    @staticmethod
+    def insert_cash_flow_statement_yoy(stock_id,xueqiu_mapped_data):
+        # yoy
+        calculator = IncomeStatementYOYCalculator()
+        # 计算 yoy
+        previous_data = calculator.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'],report_type='cash_flow_statements')
+        
+        if previous_data:
+            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id)
+            
+            TDEngineWriter._insert_income_statement_yoy(yoy_type='cfs',yoy_data=yoy_data,stock_id=stock_id)
+        else:
+            print(f"无法计算增长率，缺少去年同期数据: {stock_id} {xueqiu_mapped_data['ts']}")
+
+    # insert yoy to tdengine
+    @staticmethod
+    def _insert_income_statement_yoy(yoy_type:str,yoy_data: Dict,stock_id:str):
+        """写入增长率数据"""
+        fields = []
+        values = []
+        
+        for field, value in yoy_data.items():
+            fields.append(field)
+            if value is not None:
+                # 字符串和时间戳需要加引号
+                if isinstance(value, (str, pd.Timestamp)):
+                    values.append(f"'{value}'")
+                else:
+                    values.append(str(value))
+            else:
+                values.append('NULL')
+        
+        # 构建完整的INSERT语句，包含字段名
+        sql = f"""
+            INSERT INTO {yoy_type}_yoy_{stock_id} 
+            ({', '.join(fields)})
+            VALUES ({', '.join(values)})
+        """
+        
+        print(f"执行的SQL: {sql}")  # 调试用
+        tdengine.execute(sql)
+
+
+    @staticmethod
+    def insert_balance_sheet(tushare_data,stock_id,location):
+        # 映射到雪球结构
+        for _, row in tushare_data.iterrows():
+            xueqiu_mapped_data = map_tushare_to_xueqiu_balance(row)
+            utc_ts = tdengine._convert_to_utc2(xueqiu_mapped_data['ts'])
+            # 写入TDengine
+            sql =f"""
+                INSERT INTO bs_{stock_id} 
+                (ts, report_name, ctime, total_assets, total_liab, asset_liab_ratio, 
+                total_quity_atsopc, tradable_fnncl_assets, interest_receivable, 
+                saleable_finacial_assets, held_to_maturity_invest, fixed_asset, 
+                intangible_assets, construction_in_process, dt_assets, 
+                tradable_fnncl_liab, payroll_payable, tax_payable, estimated_liab, 
+                dt_liab, bond_payable, shares, capital_reserve, earned_surplus, 
+                undstrbtd_profit, minority_equity, total_holders_equity, 
+                total_liab_and_holders_equity, lt_equity_invest, derivative_fnncl_liab, 
+                general_risk_provision, frgn_currency_convert_diff, goodwill, 
+                invest_property, interest_payable, treasury_stock, othr_compre_income, 
+                othr_equity_instruments, currency_funds, bills_receivable, 
+                account_receivable, pre_payment, dividend_receivable, othr_receivables, 
+                inventory, nca_due_within_one_year, othr_current_assets, 
+                current_assets_si, total_current_assets, lt_receivable, dev_expenditure, 
+                lt_deferred_expense, othr_noncurrent_assets, noncurrent_assets_si, 
+                total_noncurrent_assets, st_loan, bill_payable, accounts_payable, 
+                pre_receivable, dividend_payable, othr_payables, 
+                noncurrent_liab_due_in1y, current_liab_si, total_current_liab, 
+                lt_loan, lt_payable, special_payable, othr_non_current_liab, 
+                noncurrent_liab_si, total_noncurrent_liab, salable_financial_assets, 
+                othr_current_liab, ar_and_br, contractual_assets, bp_and_ap, 
+                contract_liabilities, to_sale_asset, other_eq_ins_invest, 
+                other_illiquid_fnncl_assets, fixed_asset_sum, fixed_assets_disposal, 
+                construction_in_process_sum, project_goods_and_material, 
+                productive_biological_assets, oil_and_gas_asset, to_sale_debt, 
+                lt_payable_sum, noncurrent_liab_di, perpetual_bond, special_reserve, 
+                create_date)
+                VALUES (
+                    {utc_ts},
+                    '{xueqiu_mapped_data.get('report_name') or 'NULL'}',
+                    {xueqiu_mapped_data.get('ctime') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('asset_liab_ratio') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_quity_atsopc') or 'NULL'},
+                    {xueqiu_mapped_data.get('tradable_fnncl_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('interest_receivable') or 'NULL'},
+                    {xueqiu_mapped_data.get('saleable_finacial_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('held_to_maturity_invest') or 'NULL'},
+                    {xueqiu_mapped_data.get('fixed_asset') or 'NULL'},
+                    {xueqiu_mapped_data.get('intangible_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('construction_in_process') or 'NULL'},
+                    {xueqiu_mapped_data.get('dt_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('tradable_fnncl_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('payroll_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('tax_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('estimated_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('dt_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('bond_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('shares') or 'NULL'},
+                    {xueqiu_mapped_data.get('capital_reserve') or 'NULL'},
+                    {xueqiu_mapped_data.get('earned_surplus') or 'NULL'},
+                    {xueqiu_mapped_data.get('undstrbtd_profit') or 'NULL'},
+                    {xueqiu_mapped_data.get('minority_equity') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_holders_equity') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_liab_and_holders_equity') or 'NULL'},
+                    {xueqiu_mapped_data.get('lt_equity_invest') or 'NULL'},
+                    {xueqiu_mapped_data.get('derivative_fnncl_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('general_risk_provision') or 'NULL'},
+                    {xueqiu_mapped_data.get('frgn_currency_convert_diff') or 'NULL'},
+                    {xueqiu_mapped_data.get('goodwill') or 'NULL'},
+                    {xueqiu_mapped_data.get('invest_property') or 'NULL'},
+                    {xueqiu_mapped_data.get('interest_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('treasury_stock') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_compre_income') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_equity_instruments') or 'NULL'},
+                    {xueqiu_mapped_data.get('currency_funds') or 'NULL'},
+                    {xueqiu_mapped_data.get('bills_receivable') or 'NULL'},
+                    {xueqiu_mapped_data.get('account_receivable') or 'NULL'},
+                    {xueqiu_mapped_data.get('pre_payment') or 'NULL'},
+                    {xueqiu_mapped_data.get('dividend_receivable') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_receivables') or 'NULL'},
+                    {xueqiu_mapped_data.get('inventory') or 'NULL'},
+                    {xueqiu_mapped_data.get('nca_due_within_one_year') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_current_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('current_assets_si') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_current_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('lt_receivable') or 'NULL'},
+                    {xueqiu_mapped_data.get('dev_expenditure') or 'NULL'},
+                    {xueqiu_mapped_data.get('lt_deferred_expense') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_noncurrent_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('noncurrent_assets_si') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_noncurrent_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('st_loan') or 'NULL'},
+                    {xueqiu_mapped_data.get('bill_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('accounts_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('pre_receivable') or 'NULL'},
+                    {xueqiu_mapped_data.get('dividend_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_payables') or 'NULL'},
+                    {xueqiu_mapped_data.get('noncurrent_liab_due_in1y') or 'NULL'},
+                    {xueqiu_mapped_data.get('current_liab_si') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_current_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('lt_loan') or 'NULL'},
+                    {xueqiu_mapped_data.get('lt_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('special_payable') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_non_current_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('noncurrent_liab_si') or 'NULL'},
+                    {xueqiu_mapped_data.get('total_noncurrent_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('salable_financial_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('othr_current_liab') or 'NULL'},
+                    {xueqiu_mapped_data.get('ar_and_br') or 'NULL'},
+                    {xueqiu_mapped_data.get('contractual_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('bp_and_ap') or 'NULL'},
+                    {xueqiu_mapped_data.get('contract_liabilities') or 'NULL'},
+                    {xueqiu_mapped_data.get('to_sale_asset') or 'NULL'},
+                    {xueqiu_mapped_data.get('other_eq_ins_invest') or 'NULL'},
+                    {xueqiu_mapped_data.get('other_illiquid_fnncl_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('fixed_asset_sum') or 'NULL'},
+                    {xueqiu_mapped_data.get('fixed_assets_disposal') or 'NULL'},
+                    {xueqiu_mapped_data.get('construction_in_process_sum') or 'NULL'},
+                    {xueqiu_mapped_data.get('project_goods_and_material') or 'NULL'},
+                    {xueqiu_mapped_data.get('productive_biological_assets') or 'NULL'},
+                    {xueqiu_mapped_data.get('oil_and_gas_asset') or 'NULL'},
+                    {xueqiu_mapped_data.get('to_sale_debt') or 'NULL'},
+                    {xueqiu_mapped_data.get('lt_payable_sum') or 'NULL'},
+                    {xueqiu_mapped_data.get('noncurrent_liab_di') or 'NULL'},
+                    {xueqiu_mapped_data.get('perpetual_bond') or 'NULL'},
+                    {xueqiu_mapped_data.get('special_reserve') or 'NULL'},
+                    '{xueqiu_mapped_data.get('create_date') or 'NULL'}'
+                )
+            """
+            tdengine.execute(sql)
+            
+            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"bs_yoy_{stock_id}","balance_sheets_growth",True)
+            TDEngineWriter.insert_balance_sheet_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+
+    
+    @staticmethod
+    def insert_cash_flow_statement(tushare_data,stock_id,location):
+        def format_sql_value(value):
+            if value is None:
+                return 'NULL'
+            elif isinstance(value, str):
+                escaped_value = value.replace("'", "''")
+                return f"'{escaped_value}'"
+            elif isinstance(value, pd.Timestamp):
+                return f"'{value.strftime('%Y-%m-%d %H:%M:%S')}'"
+            else:
+                return str(value)
+        # 映射到雪球结构
+        for _, row in tushare_data.iterrows():
+            data = map_tushare_to_xueqiu_cashflowstatment(row)
+            utc_ts = tdengine._convert_to_utc2(data['ts'])
+            # 写入TDengine
+            sql = f"""
+                INSERT INTO cfs_{stock_id} 
+                VALUES (
+                    {utc_ts},
+                    {format_sql_value(data.get('report_name'))},
+                    {format_sql_value(data.get('ctime'))},
+                    {format_sql_value(data.get('ncf_from_oa'))},
+                    {format_sql_value(data.get('ncf_from_ia'))},
+                    {format_sql_value(data.get('ncf_from_fa'))},
+                    {format_sql_value(data.get('cash_received_of_othr_oa'))},
+                    {format_sql_value(data.get('sub_total_of_ci_from_oa'))},
+                    {format_sql_value(data.get('cash_paid_to_employee_etc'))},
+                    {format_sql_value(data.get('payments_of_all_taxes'))},
+                    {format_sql_value(data.get('othrcash_paid_relating_to_oa'))},
+                    {format_sql_value(data.get('sub_total_of_cos_from_oa'))},
+                    {format_sql_value(data.get('cash_received_of_dspsl_invest'))},
+                    {format_sql_value(data.get('invest_income_cash_received'))},
+                    {format_sql_value(data.get('net_cash_of_disposal_assets'))},
+                    {format_sql_value(data.get('net_cash_of_disposal_branch'))},
+                    {format_sql_value(data.get('cash_received_of_othr_ia'))},
+                    {format_sql_value(data.get('sub_total_of_ci_from_ia'))},
+                    {format_sql_value(data.get('invest_paid_cash'))},
+                    {format_sql_value(data.get('cash_paid_for_assets'))},
+                    {format_sql_value(data.get('othrcash_paid_relating_to_ia'))},
+                    {format_sql_value(data.get('sub_total_of_cos_from_ia'))},
+                    {format_sql_value(data.get('cash_received_of_absorb_invest'))},
+                    {format_sql_value(data.get('cash_received_from_investor'))},
+                    {format_sql_value(data.get('cash_received_from_bond_issue'))},
+                    {format_sql_value(data.get('cash_received_of_borrowing'))},
+                    {format_sql_value(data.get('cash_received_of_othr_fa'))},
+                    {format_sql_value(data.get('sub_total_of_ci_from_fa'))},
+                    {format_sql_value(data.get('cash_pay_for_debt'))},
+                    {format_sql_value(data.get('cash_paid_of_distribution'))},
+                    {format_sql_value(data.get('branch_paid_to_minority_holder'))},
+                    {format_sql_value(data.get('othrcash_paid_relating_to_fa'))},
+                    {format_sql_value(data.get('sub_total_of_cos_from_fa'))},
+                    {format_sql_value(data.get('effect_of_exchange_chg_on_cce'))},
+                    {format_sql_value(data.get('net_increase_in_cce'))},
+                    {format_sql_value(data.get('initial_balance_of_cce'))},
+                    {format_sql_value(data.get('final_balance_of_cce'))},
+                    {format_sql_value(data.get('cash_received_of_sales_service'))},
+                    {format_sql_value(data.get('refund_of_tax_and_levies'))},
+                    {format_sql_value(data.get('goods_buy_and_service_cash_pay'))},
+                    {format_sql_value(data.get('net_cash_amt_from_branch'))},
+                    {format_sql_value(data.get('create_date'))}
+                )
+            """
+            tdengine.execute(sql)
+            
+            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"cfs_yoy_{stock_id}","cash_flow_statements_growth",True)
+            TDEngineWriter.insert_cash_flow_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=data)

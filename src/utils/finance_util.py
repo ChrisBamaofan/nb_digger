@@ -1,3 +1,7 @@
+import pandas as pd
+from finance_report.balance_sheet import BalanceSheet
+from finance_report.cash_flow_statement import CashFlowStatement
+
 def map_tushare_to_xueqiu(tushare_data):
     """将Tushare利润表数据映射到雪球表结构"""
     
@@ -10,7 +14,7 @@ def map_tushare_to_xueqiu(tushare_data):
         
         # 核心利润指标
         'net_profit': 'n_income',                          # 净利润
-        'net_profit_atsopc': 'n_income_attr_p',           # 归属于母公司股东的净利润
+        'net_profit_atsopc': 'n_income_attr_p',           # 归属于母公司股东的净利润  111765299.46
         'total_revenue': 'total_revenue',                  # 营业总收入
         'op': 'operate_profit',                           # 营业利润
         'income_from_chg_in_fv': 'fv_value_chg_gain',     # 公允价值变动收益
@@ -22,7 +26,7 @@ def map_tushare_to_xueqiu(tushare_data):
         'non_operating_income': 'non_oper_income',        # 营业外收入
         'non_operating_payout': 'non_oper_exp',           # 营业外支出
         'profit_total_amt': 'total_profit',               # 利润总额
-        'minority_gal': 'minority_gain',                  # 少数股东损益
+        'minority_gal': 'minority_gain',                  # 少数股东损益     3695819.76
         'basic_eps': 'basic_eps',                         # 基本每股收益
         'dlt_earnings_per_share': 'diluted_eps',          # 稀释每股收益
         
@@ -130,3 +134,86 @@ def generate_report_name(end_date, report_type):
         period = f"{month}月报"
     
     return f"{year}{period}"
+
+
+def map_tushare_to_xueqiu_balance(tushare_data):
+    """将Tushare资产负债表 数据映射到雪球表结构"""
+    bs = BalanceSheet()
+    mapping = bs.field_mapping
+    
+    xueqiu_data = {}
+    
+    # 基础字段映射
+    for tushare_field, xueqiu_field in mapping.items():
+        if tushare_field in tushare_data and pd.notna(tushare_data[tushare_field]):
+            xueqiu_data[xueqiu_field] = tushare_data[tushare_field]
+        else:
+            xueqiu_data[xueqiu_field] = None
+    
+    # 特殊处理字段
+    # 1. 报告名称生成
+    xueqiu_data['report_name'] = generate_report_name(
+        tushare_data.get('end_date'), 
+        tushare_data.get('report_type')
+    )
+    
+    # 2. 时间戳处理
+    if 'end_date' in tushare_data and tushare_data['end_date']:
+        xueqiu_data['ts'] = pd.to_datetime(tushare_data['end_date'])
+    
+    if 'ann_date' in tushare_data and tushare_data['ann_date']:
+        xueqiu_data['ctime'] = int(pd.to_datetime(tushare_data['ann_date']).timestamp() * 1000)
+    
+    # 3. 公司ID
+    xueqiu_data['company_id'] = tushare_data.get('ts_code', '')
+    
+    # 4. 创建时间（使用当前时间）
+    xueqiu_data['create_time'] = pd.Timestamp.now()
+    
+    # 3. 计算资产负债率
+    total_assets = tushare_data.get('total_assets')
+    total_liab = tushare_data.get('total_liab')
+    if total_assets and total_liab and total_assets > 0:
+        xueqiu_data['asset_liab_ratio'] = total_liab / total_assets
+    else:
+        xueqiu_data['asset_liab_ratio'] = None
+    
+    return xueqiu_data
+
+
+def map_tushare_to_xueqiu_cashflowstatment(tushare_data):
+    """将Tushare资产负债表 数据映射到雪球表结构"""
+    cfs = CashFlowStatement()
+    mapping = cfs.field_mapping
+    
+    xueqiu_data = {}
+    
+    # 基础字段映射
+    for tushare_field, xueqiu_field in mapping.items():
+        if tushare_field in tushare_data and pd.notna(tushare_data[tushare_field]):
+            xueqiu_data[xueqiu_field] = tushare_data[tushare_field]
+        else:
+            xueqiu_data[xueqiu_field] = None
+    
+    # 特殊处理字段
+    # 1. 报告名称生成
+    xueqiu_data['report_name'] = generate_report_name(
+        tushare_data.get('end_date'), 
+        tushare_data.get('report_type')
+    )
+    
+    # 2. 时间戳处理
+    if 'end_date' in tushare_data and tushare_data['end_date']:
+        xueqiu_data['ts'] = pd.to_datetime(tushare_data['end_date'])
+    
+    if 'ann_date' in tushare_data and tushare_data['ann_date']:
+        xueqiu_data['ctime'] = int(pd.to_datetime(tushare_data['ann_date']).timestamp() * 1000)
+    
+    # 3. 公司ID
+    xueqiu_data['company_id'] = tushare_data.get('ts_code', '')
+    
+    # 4. 创建时间（使用当前时间）
+    xueqiu_data['create_time'] = pd.Timestamp.now()
+    
+    
+    return xueqiu_data

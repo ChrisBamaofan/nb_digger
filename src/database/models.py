@@ -46,7 +46,16 @@ class StockBasicInfo(Base):
     industry = Column(String(100), nullable=True, comment='行业')
     is_retired = Column(Boolean,nullable=False, default=0.0, comment='是否退市')
     is_new = Column(Boolean,nullable=False, default=0.0, comment='是否新上市')
-
+    
+    fullname = Column(String(50), nullable=True, comment='股票全称')
+    enname = Column(String(50), nullable=True, comment='英文全称')
+    cnspell = Column(String(50), nullable=True, comment='拼音缩写')
+    market = Column(String(20), nullable=True, comment='市场类型（主板/创业板/科创板/CDR）')
+    is_hs = Column(String(5), nullable=True, comment='沪深港通标的，N否 H沪股通 S深股通')
+    curr_type = Column(String(50), nullable=True, comment='交易货币')
+    delist_date = Column(TIMESTAMP, nullable=True, comment='退市日期')
+    act_name = Column(String(50), nullable=True, comment='实控人名称')
+    act_ent_type = Column(String(50), nullable=True, comment='实控人企业性质')
     
     __table_args__ = (
         {'comment': '单个股票简介表'},

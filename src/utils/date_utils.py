@@ -107,5 +107,35 @@ class DateUtils:
         """
         return date_series.dt.strftime('%Y%m%d')
 
+    
+    @staticmethod
+    def format_date_to_ymd(date_value):
+        """将日期转为 %Y%m%d 格式"""
+        if not date_value:
+            return None
+        
+        # 如果是字符串，先转为datetime对象
+        if isinstance(date_value, str):
+            # 尝试不同的日期格式
+            for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y%m%d', '%Y-%m-%d %H:%M:%S']:
+                try:
+                    date_obj = datetime.strptime(date_value, fmt)
+                    return date_obj.strftime('%Y%m%d')
+                except ValueError:
+                    continue
+            return None  # 无法解析的格式
+        
+        # 如果是datetime对象
+        elif isinstance(date_value, (datetime, pd.Timestamp)):
+            return date_value.strftime('%Y%m%d')
+        
+        # 其他类型
+        else:
+            try:
+                return pd.to_datetime(date_value).strftime('%Y%m%d')
+            except:
+                return None
+
 # 工具类实例导出
 date_utils = DateUtils()
+

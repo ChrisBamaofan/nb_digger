@@ -83,3 +83,7 @@ def load_db_config() -> Dict[str, Any]:
 
 def get_log_config() -> Dict[str, Any]:
     return ConfigLoader().get_log_config()
+
+def get_tushare() -> Dict[str, Any]:
+    config = ConfigLoader().get_config('app')
+    return config['data_sources']['tushare']
