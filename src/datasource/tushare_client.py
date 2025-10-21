@@ -250,8 +250,8 @@ class TushareService:
                 # 2.准备
                 tushare = TushareService()
                 db_manager = DBManager()
-                start_date = date(2025, 9, 29).strftime('%Y%m%d')
-                end_date = date(2025, 9, 30).strftime('%Y%m%d')
+                start_date = date(2025, 10, 17).strftime('%Y%m%d')
+                end_date = date(2025, 10, 18).strftime('%Y%m%d')
                 stock_list = db_manager.get_stock_id_list()
                 print(stock_list)
                 
@@ -265,7 +265,7 @@ class TushareService:
 
                     for stock in stock_list:
                         
-                        time.sleep(2)
+                        time.sleep(0.31)
                         stock_id = stock.stock_id
                         location = stock.location
                         newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
@@ -288,7 +288,7 @@ class TushareService:
                             except Exception as e:
                                 logger.error(f"插入股票 {stock_row['ts_code']} 失败: {e}")
                                 continue
-                        time.sleep(1)
+                        time.sleep(0.31)
                         # weekly
                         period_tu = parts[0]
                         # week
@@ -404,3 +404,23 @@ class TushareService:
                 return float(value)
             except (TypeError, ValueError):
                 return default
+
+    def getBJStock(self,stock_id:str):
+        setup_logger()
+        tushare = TushareService()
+        db_manager = DBManager()
+        stock_list = db_manager.get_beijing_stock_list()
+        print(stock_list)
+        #获取方大新材新旧代码对照数据
+        for stock in stock_list:
+            newStockId = tushare.convert_stock_id(stock_id=stock.stock_id,location=stock.location)
+            df = self.pro.bse_mapping(o_code=newStockId)
+            # 1.tdengine 中 income_statement 表的所有子表都要更新 表名和tag名
+            #   第一步是新建tdengine的表，再执行 insert into is_903103 select * from is_803103; 下面都是类似的
+            # 2.tdengine 中 income_statement_yoy 表的所有子表都要更新 表名和tag名
+            # 3.tdengine 中 balance_sheets 表的所有子表都要更新 表名和tag名
+            # 4.tdengine 中 balance_sheets_growth 表的所有子表都要更新 表名和tag名
+            # 5.tdengine 中 cash_flow_statements 表的所有子表都要更新 表名和tag名
+            # 6.tdengine 中 cash_flow_statements_growth 表的所有子表都要更新 表名和tag名
+            # 7 更新mysql的basic
+            # 8 更新 mysql的 perdayFianl

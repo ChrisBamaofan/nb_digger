@@ -70,11 +70,21 @@ class DBManager:
             stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.is_new == 0).all()
             return stock_daily_list
         except Exception as e:
-            logger.error(f"获取日线数据列表失败: {e}")
+            logger.error(f"获取stock列表失败: {e}")
             raise
         finally:
             session.close()
 
+    def get_beijing_stock_list(self)  -> List[StockBasicInfo] :
+        session = self.Session()
+        try:
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.location == 'china.beijing').all()
+            return stock_daily_list
+        except Exception as e:
+            logger.error(f"获取stock列表失败: {e}")
+            raise
+        finally:
+            session.close()
 
     def get_stock_id_list_point(self) -> List[StockBasicInfo]:
         """获取需要处理的股票列表"""
