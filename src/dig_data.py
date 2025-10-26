@@ -6,9 +6,10 @@ from datetime import date
 from database.tdengine_writer import TDEngineWriter
 import time
 from database.tdengine_reader import TDEngineReader as tdReader
-
+import logging
 import akshare as ak
 
+logger = logging.getLogger(__name__)
 # 获取所有的数据，修改start 来调整获取的数据启始时间
 def dig_data():
     setup_logger()
@@ -205,18 +206,12 @@ def dig_new_per_data():
                 )
                 
 
-def dig_income_statment():
+def dig_income_statment(start_date,end_date):
     setup_logger()
     tushare = TushareService()
     db_manager = DBManager()
-
-
-    start_date = date(2025, 6, 1).strftime('%Y%m%d')
-    end_date = date(2025, 10, 2).strftime('%Y%m%d')
     
-    stock_list = db_manager.get_stock_id_list()
-    
-
+    stock_list = db_manager.get_stock_id_list(is_new=1)
     for stock in stock_list:
         time.sleep(0.301)
         stock_id = stock.stock_id
@@ -229,6 +224,7 @@ def dig_income_statment():
 
         tushare_data = tushare.get_income_statement(stock_id=newStockId,start_time=start_date,end_time=end_date)
         TDEngineWriter.insert_income_statement(tushare_data=tushare_data,stock_id=stock_id)
+        
 
 def dig_income_statment_yoy():
     setup_logger()
@@ -250,15 +246,12 @@ def dig_income_statment_yoy():
             TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_current_data)
 
 # 从tushare 获取资产负债表的数据，遍历每个股票，并捞取存入tdengine,
-def dig_balance_sheet():
+def dig_balance_sheet(start_date,end_date):
     setup_logger()
     tushare = TushareService()
     db_manager = DBManager()
-
-
-    start_date = date(2025, 6, 1).strftime('%Y%m%d')
-    end_date = date(2025, 10, 2).strftime('%Y%m%d')
-    
+    # start_date = date(2025, 6, 1).strftime('%Y%m%d')
+    # end_date = date(2025, 10, 2).strftime('%Y%m%d')
     stock_list = db_manager.get_stock_id_list()
     
 
@@ -276,15 +269,12 @@ def dig_balance_sheet():
         TDEngineWriter.insert_balance_sheet(tushare_data=tushare_data,stock_id=stock_id,location= location)
 
 # 从tushare 获取现金流表的数据，遍历每个股票，并捞取存入tdengine,
-def dig_cash_flow_statement():
+def dig_cash_flow_statement(start_date,end_date):
     setup_logger()
     tushare = TushareService()
     db_manager = DBManager()
-
-
-    start_date = date(2025, 6, 1).strftime('%Y%m%d')
-    end_date = date(2025, 10, 2).strftime('%Y%m%d')
-    
+    # start_date = date(2025, 6, 1).strftime('%Y%m%d')
+    # end_date = date(2025, 10, 2).strftime('%Y%m%d')
     stock_list = db_manager.get_stock_id_list()
     
 
@@ -300,3 +290,68 @@ def dig_cash_flow_statement():
 
         tushare_data = tushare.get_cashflowstatement(stock_id = newStockId,start_time=start_date,end_time=end_date)
         TDEngineWriter.insert_cash_flow_statement(tushare_data=tushare_data,stock_id=stock_id)
+        
+# 新股 1、获取从 上市日到当前日的 周级交易历史插入 per_day_fianl
+# 2、财报全量获取插入 tdengine
+# 支持港股、美股、A股
+def digNewStock(self):
+    try:
+        setup_logger()
+        # 1.准备
+        tushare = TushareService()
+        db_manager = DBManager()
+        
+        end_date = date(2025, 10, 25).strftime('%Y%m%d')
+        stock_list = db_manager.get_new_stock_id_list()
+        print(stock_list)
+        # tushare: daily_day,weekly_week,monthly_month
+        input_str = "weekly_week"
+        items = input_str.split(',')
+        for item in items:
+            parts = item.split('_')
+            for stock in stock_list:
+                stock_id = stock.stock_id
+                location = stock.location
+                start_date =  stock.launch_date.strftime('%Y%m%d')
+                newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
+                # weekly
+                period_tu = parts[0]
+                # week
+                period_local = parts[1]
+                log.info(f"正在处理股票: {stock},{period_local},{period_tu}")
+                raw_data = tushare.get_adj_stock_data(
+                    symbol= newStockId,
+                    period = period_tu,
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq"
+                )
+                
+                # todo  循环遍历
+                if raw_data is not None:
+                    """同步数据到 mysql"""
+                    db_ready_data = db_manager.convert_to_db_format_tushare(stock_id,raw_data,period_local)
+                    
+                    db_manager.save_daily_data(db_ready_data)
+
+                    """同步数据到TDEngine"""
+                    # 确保表存在
+                    table_name_td = f"{period_local}_{stock_id}"
+                    TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False)
+                    
+                    # 批量写入数据
+                    TDEngineWriter.write_daily_data_batch(
+                        data=db_ready_data,
+                        company_id=stock_id,
+                        table_name = table_name_td
+                    )
+
+                # 财报数据 获取并写入 tdengine
+                
+                dig_income_statment(start_date=start_date,end_date=end_date)
+                dig_balance_sheet(start_date=start_date,end_date=end_date)
+                
+        
+    except Exception as e:
+        logger.error(f"检查新增股票失败: {e}")
+        return []

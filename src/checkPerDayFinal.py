@@ -24,7 +24,7 @@ def checkData():
     mismatch_list = []  # 存储不一致的股票列表
 
     # 股票列表 (示例)
-    stock_list = db_manager.get_stock_id_list()
+    stock_list = db_manager.get_stock_id_list(is_new=0)
     #stock_list = ['002117']
     # stock_list = ['002117','300797','300986','301162','605319','002579','002615','002647','002947','300201','300245','300484','300698','300752','300791','300835','300959','301333','600367','600506','600714','600975','603015','603239','603322','605319']
     list = []
@@ -112,7 +112,7 @@ def fixDataAfterFQ():
     adjusted_stocks = []  # 存储已调整的股票列表
 
     # 股票列表
-    stock_list = db_manager.get_stock_id_list()
+    stock_list = db_manager.get_stock_id_list(is_new=0)
 
     for stock in stock_list:
         time.sleep(3)  # 防止请求过于频繁

@@ -10,6 +10,8 @@ from utils.logger import setup_logger,log
 from database.tdengine_writer import TDEngineWriter
 from finance_report.balance_sheet import BalanceSheet
 from finance_report.cash_flow_statement import CashFlowStatement
+from database.tdengine_connector import tdengine
+from database.models import StockBasicInfo
 
 logger = logging.getLogger(__name__)
 
@@ -240,19 +242,17 @@ class TushareService:
     def update_basic_get_stock(self) :
             try:
                 setup_logger()
-                # 1. 从tushare获取所有活跃股票的基本信息
                 tushare_stocks_df = self.pro.stock_basic(
                     exchange='', 
                     list_status='L', 
                     fields='ts_code,symbol,name,area,industry,fullname,enname,cnspell,market,exchange,curr_type,list_status,list_date,delist_date,is_hs,act_name,act_ent_type'
                 )
-                
                 # 2.准备
                 tushare = TushareService()
                 db_manager = DBManager()
-                start_date = date(2025, 10, 17).strftime('%Y%m%d')
-                end_date = date(2025, 10, 18).strftime('%Y%m%d')
-                stock_list = db_manager.get_stock_id_list()
+                start_date = date(2025, 10, 24).strftime('%Y%m%d')
+                end_date = date(2025, 10, 25).strftime('%Y%m%d')
+                stock_list = db_manager.get_stock_id_list(is_new=0)
                 print(stock_list)
                 
                 # tushare: daily_day,weekly_week,monthly_month
@@ -413,14 +413,46 @@ class TushareService:
         print(stock_list)
         #获取方大新材新旧代码对照数据
         for stock in stock_list:
-            newStockId = tushare.convert_stock_id(stock_id=stock.stock_id,location=stock.location)
-            df = self.pro.bse_mapping(o_code=newStockId)
+            time.sleep(0.31)
+            oldStockIdFull = tushare.convert_stock_id(stock_id=stock.stock_id,location=stock.location)
+            df = self.pro.bse_mapping(o_code=oldStockIdFull)
+            
+            n_code = df['n_code'].str.replace('.BJ', '', regex=False).iloc[0]
+            print(n_code)
             # 1.tdengine 中 income_statement 表的所有子表都要更新 表名和tag名
             #   第一步是新建tdengine的表，再执行 insert into is_903103 select * from is_803103; 下面都是类似的
-            # 2.tdengine 中 income_statement_yoy 表的所有子表都要更新 表名和tag名
-            # 3.tdengine 中 balance_sheets 表的所有子表都要更新 表名和tag名
-            # 4.tdengine 中 balance_sheets_growth 表的所有子表都要更新 表名和tag名
-            # 5.tdengine 中 cash_flow_statements 表的所有子表都要更新 表名和tag名
-            # 6.tdengine 中 cash_flow_statements_growth 表的所有子表都要更新 表名和tag名
-            # 7 更新mysql的basic
-            # 8 更新 mysql的 perdayFianl
+            tushare.tdengine_op(stock,n_code,'is','income_statement')
+            tushare.tdengine_op(stock,n_code,'is_yoy','income_statement_yoy')
+            tushare.tdengine_op(stock,n_code,'bs','balance_sheets')
+            tushare.tdengine_op(stock,n_code,'bs_yoy','balance_sheets_growth')
+            tushare.tdengine_op(stock,n_code,'cfs','cash_flow_statements')
+            tushare.tdengine_op(stock,n_code,'cfs_yoy','cash_flow_statements_growth')
+            # 2 更新mysql的basic
+            update_basic = f'update stock_basic_info set stock_id = {n_code} where stock_id = {stock.stock_id}'
+            db_manager.execute_sql(update_basic)
+            
+            # 3 更新 mysql的 perdayFianl
+            update_perday = f'update stock_per_day_final set stock_id = {n_code} where stock_id = {stock.stock_id}'
+            db_manager.execute_sql(update_perday)
+            
+    
+    def tdengine_op(self,stock:StockBasicInfo,n_code,type,fin_type):
+        try:
+            td_table = f'{type}_{stock.stock_id}'
+            new_td_table = f'{type}_{n_code}'
+            TDEngineWriter.create_dynamic_table(db='nb_stock',company_id=n_code,location=stock.location,scope='',table_name=new_td_table,stable=fin_type,fin=True)
+            query = f'select * from {td_table}'
+            result = tdengine.execute(query)
+            if(result):
+                insert_sql = f'insert into {new_td_table} select * from {td_table}'
+                tdengine.execute(insert_sql)
+                delete_sql = f'drop table {td_table}'
+                tdengine.execute(delete_sql)
+        except Exception as e:
+            
+            logger.error(f"操作tdengine异常: {e}")
+        finally:
+            return
+        
+
+    

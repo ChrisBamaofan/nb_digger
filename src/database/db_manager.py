@@ -64,10 +64,10 @@ class DBManager:
         finally:
             session.close()
 
-    def get_stock_id_list(self)  -> List[StockBasicInfo] :
+    def get_stock_id_list(self,is_new:0)  -> List[StockBasicInfo] :
         session=self.Session()
         try:
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.is_new == 0).all()
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.is_new == is_new).all()
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取stock列表失败: {e}")
@@ -75,10 +75,21 @@ class DBManager:
         finally:
             session.close()
 
+    def get_new_stock_id_list(self)  -> List[StockBasicInfo] :
+        session=self.Session()
+        try:
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location,StockBasicInfo.launch_date).where(StockBasicInfo.is_retired==0,StockBasicInfo.is_new == 1).all()
+            return stock_daily_list
+        except Exception as e:
+            logger.error(f"获取stock列表失败: {e}")
+            raise
+        finally:
+            session.close()
+            
     def get_beijing_stock_list(self)  -> List[StockBasicInfo] :
         session = self.Session()
         try:
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.location == 'china.beijing').all()
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.location == 'china.beijing',StockBasicInfo.pid >= 6391).all()
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取stock列表失败: {e}")
@@ -240,7 +251,16 @@ class DBManager:
 
     def execute_sql(self,sql):
         session = self.Session()
-        rows = session.execute(sql)
+        try:
+            # 使用 text() 包装 SQL 语句
+            rows = session.execute(text(sql))
+            session.commit()
+            return rows
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
 
 
     # 批量更新

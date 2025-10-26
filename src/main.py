@@ -15,7 +15,7 @@ def updateCycleValue():
     ak = AKShareClient()
     db_manager = DBManager()
 
-    stock_list = db_manager.get_stock_id_list()
+    stock_list = db_manager.get_stock_id_list(is_new=0)
     for stock in stock_list:
         time.sleep(3)
         stock_id = stock.stock_id
@@ -44,7 +44,7 @@ def updateRetiredStocks():
     ak = AKShareClient()
     db_manager = DBManager()
 
-    stock_list = db_manager.get_stock_id_list()
+    stock_list = db_manager.get_stock_id_list(is_new=0)
     stock_id_list = [stock.stock_id for stock in stock_list if stock.stock_id is not None]
     print(stock_id_list)
     ak = AKShareClient()
@@ -57,7 +57,7 @@ def updateNewStocks():
     setup_logger()
     ts = TushareService()
     db_manager = DBManager()
-    stock_list = db_manager.get_stock_id_list()
+    stock_list = db_manager.get_stock_id_list(is_new=0)
     # 获取当前数据库中已有的A股股票id列表
     stock_id_list = [
         ts.convert_stock_id(stock.stock_id, stock.location) 
@@ -66,18 +66,17 @@ def updateNewStocks():
     ]
     # 从tushare获取当前上市的A股股票列表
     new_list = ts.check_new_stocks(stock_id_list)
-    
-    
+
 
 if __name__ == "__main__":
     # 每周交易数据
     ts = TushareService()
-    ts.update_basic_get_stock()
-    ts.getBJStock(stock_id='430418')
+    # ts.update_basic_get_stock()
+    # ts.getBJStock(stock_id='430418')
+    dig_data.digNewStock()
     # dig_data.dig_income_statment()
     # dig_data.dig_income_statment_yoy()
     # dig_data.dig_balance_sheet()
-    # todo copy balance_sheet
     # dig_data.dig_cash_flow_statement()
     # 2. HK stock list , basic_info, finance_report,
     # 3. USA stock list, basic_info, finance_report

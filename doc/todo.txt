@@ -1,12 +1,3 @@
-
-0   北交所代码修改                  补充20251017的代码
-    1）财报的相关表 is-isyoy-bs-bsyoy-cfs-cfsyoy
-        新建一个tdengine的表
-        insert into is_903103 select * from is_803103;
-
-    2）更新mysql的basic
-    3）更新 mysql的 perdayFianl
-
 1   新股                            1/2
     获取该历史股价，历史财报数据，（仅获取最新的财报，获取完整的week数据） todo 
     新股 增量 week级别的数据，增量 财报数据，
@@ -38,3 +29,13 @@
 
 11 	实时计算根据日来计算周月季年
 12	缓存均线数据到数据库及redis
+
+
+
+0   北交所代码修改   done                  补充20251017的代码
+    1）财报的相关表 is-isyoy-bs-bsyoy-cfs-cfsyoy
+        新建一个tdengine的表
+        insert into is_903103 select * from is_803103;
+
+    2）更新mysql的basic
+    3）更新 mysql的 perdayFianl

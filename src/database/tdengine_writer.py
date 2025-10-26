@@ -85,8 +85,6 @@ class TDEngineWriter:
             log.error(f"TDEngine表创建失败: {e}")
             return False
 
-    
-        
     @staticmethod
     def execute_bulk_price_adjustment(stock_id: str, table_name:str,adjustment_diff: float, adjustment_date: str):
         
