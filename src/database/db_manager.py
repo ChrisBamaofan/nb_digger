@@ -41,12 +41,30 @@ class DBManager:
         """保存日线数据到stock_per_day_final表"""
         session = self.Session()
         try:
-            # 转换NaN为默认值
-            data_df = data_df.fillna({
+            # 定义所有数值列的默认值
+            numeric_columns_defaults = {
+                'amount': 0,
+                'volume': 0,
+                'start_price': 0,
+                'end_price': 0,
+                'high_price': 0,
+                'low_price': 0,
                 'change_price': 0,
                 'change_percent': 0,
                 'turnover_ratio': 0
-            })
+            }
+            
+            # 只填充数据框中实际存在的列
+            existing_columns = {col: default for col, default in numeric_columns_defaults.items() 
+                            if col in data_df.columns}
+            
+            # 转换NaN为默认值
+            data_df = data_df.fillna(existing_columns)
+            
+            # 确保数据类型正确
+            for col in existing_columns:
+                if col in data_df.columns:
+                    data_df[col] = pd.to_numeric(data_df[col], errors='coerce').fillna(0)
             
             # 转换为ORM对象
             records = [StockDaily(**row) for row in data_df.to_dict('records')]
@@ -148,7 +166,7 @@ class DBManager:
             return result
         except Exception as e:
             logger.warning(f"未找到{stock_id}的{period}周期数据")
-            raise
+            return None
         finally:
             session.close()
 
@@ -208,8 +226,8 @@ class DBManager:
             # 'circulating_market_value': float(df[df['item'] == '流通市值']['value'].iloc[0]),
             # 'industry': df[df['item'] == '行业']['value'].iloc[0]
 
-    def update_basic_info(self,basic_df:dict):
-        """更新股票基本信息"""
+    def update_basic_info(self, basic_df: dict):
+        """更新股票基本信息 - 只更新传入的字段"""
         session = self.Session()
         try:
             # 数据预处理
@@ -217,29 +235,28 @@ class DBManager:
             
             existing = session.query(StockBasicInfo).filter_by(stock_id=stock_id).first()
             if existing:
-                # 只更新需要变更的字段
-                existing.circulating_market_value = basic_df['circulating_market_value']
-                existing.total_market_value = basic_df['total_market_value']
-                existing.circulating_stock = basic_df['circulating_stock']
-                existing.total_stock = basic_df['total_stock']
-                existing.industry = basic_df['industry']
-                existing.launch_date = basic_df['launch_date']
-                existing.is_retired = 0
-                existing.fullname = basic_df['fullname']
-                existing.enname = basic_df['enname']
-                existing.cnspell = basic_df['cnspell']
-                existing.market = basic_df['market']
-                existing.is_hs = basic_df['is_hs']
-                existing.curr_type = basic_df['curr_type']
-                existing.delist_date = basic_df['delist_date']
-                existing.act_name = basic_df['act_name']
-                existing.act_ent_type = basic_df['act_ent_type']
+                # 只更新传入的字段
+                update_fields = [
+                    'circulating_market_value', 'total_market_value', 'circulating_stock',
+                    'total_stock', 'industry', 'launch_date', 'fullname', 'enname',
+                    'cnspell', 'market', 'is_hs', 'curr_type', 'delist_date',
+                    'act_name', 'act_ent_type', 'is_new'
+                ]
                 
+                for field in update_fields:
+                    if field in basic_df and basic_df[field] is not None:
+                        setattr(existing, field, basic_df[field])
+                
+                # 特殊处理 is_retired，如果没有传入则保持原值
+                if 'is_retired' in basic_df and basic_df['is_retired'] is not None:
+                    existing.is_retired = basic_df['is_retired']
+                else:
+                    existing.is_retired = 0  # 或者保持原值 existing.is_retired
+                    
             else:
                 session.add(StockBasicInfo(**basic_df))
                 
             session.commit()
-            
             logger.success(f"成功更新股票{stock_id}基本信息")
             
         except Exception as e:

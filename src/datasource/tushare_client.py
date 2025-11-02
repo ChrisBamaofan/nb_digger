@@ -156,8 +156,8 @@ class TushareService:
         
         df = self.pro.balancesheet(ts_code=stock_id, start_date=start_time, end_date=end_time, fields=fields)
         # 方法1：临时设置显示选项
-        with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
-            print(df)
+        # with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
+        #     # print(df)
         return df
     
     def get_cashflowstatement(self,stock_id:str,start_time,end_time):
@@ -168,8 +168,8 @@ class TushareService:
         
         df = self.pro.cashflow(ts_code=stock_id, start_date=start_time, end_date=end_time, fields=fields)
         # 方法1：临时设置显示选项
-        with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
-            print(df)
+        # with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
+        #     print(df)
         return df
 
 
@@ -250,8 +250,8 @@ class TushareService:
                 # 2.准备
                 tushare = TushareService()
                 db_manager = DBManager()
-                start_date = date(2025, 10, 24).strftime('%Y%m%d')
-                end_date = date(2025, 10, 25).strftime('%Y%m%d')
+                start_date = date(2025, 10, 31).strftime('%Y%m%d')
+                end_date = date(2025, 10, 31).strftime('%Y%m%d')
                 stock_list = db_manager.get_stock_id_list(is_new=0)
                 print(stock_list)
                 
@@ -317,7 +317,7 @@ class TushareService:
                             TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False)
                             
                             # 批量写入数据
-                            TDEngineWriter.write_daily_data_batch(
+                            TDEngineWriter.write_data_batch(
                                 data=db_ready_data,
                                 company_id=stock_id,
                                 table_name = table_name_td

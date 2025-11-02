@@ -69,11 +69,13 @@ def updateNewStocks():
 
 
 if __name__ == "__main__":
+    # 新股
+    # 除权
     # 每周交易数据
     ts = TushareService()
     # ts.update_basic_get_stock()
     # ts.getBJStock(stock_id='430418')
-    dig_data.digNewStock()
+    dig_data.dig_new_stock_info()
     # dig_data.dig_income_statment()
     # dig_data.dig_income_statment_yoy()
     # dig_data.dig_balance_sheet()

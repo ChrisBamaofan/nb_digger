@@ -71,7 +71,7 @@ def dig_data():
                 TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False)
                 
                 # 批量写入数据
-                TDEngineWriter.write_daily_data_batch(
+                TDEngineWriter.write_data_batch(
                     data=db_ready_data,
                     company_id=stock_id,
                     table_name = table_name_td
@@ -135,7 +135,7 @@ def dig_data_tushare():
                 TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False)
                 
                 # 批量写入数据
-                TDEngineWriter.write_daily_data_batch(
+                TDEngineWriter.write_data_batch(
                     data=db_ready_data,
                     company_id=stock_id,
                     table_name = table_name_td
@@ -199,110 +199,112 @@ def dig_new_per_data():
                 TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False)
                 
                 # 批量写入数据
-                TDEngineWriter.write_daily_data_batch(
+                TDEngineWriter.write_data_batch(
                     data=db_ready_data,
                     company_id=stock_id,
                     table_name = table_name_td
                 )
                 
 
-def dig_income_statment(start_date,end_date):
+def dig_income_statment(stock_id,location,start_date,end_date,is_new):
     setup_logger()
     tushare = TushareService()
     db_manager = DBManager()
     
-    stock_list = db_manager.get_stock_id_list(is_new=1)
-    for stock in stock_list:
-        time.sleep(0.301)
-        stock_id = stock.stock_id
-        print(stock_id)
-        location = stock.location
-        newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
-        # 确保表存在 
-        table_name_td = f"is_{stock_id}"
-        TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,'',table_name_td,"income_statement",True)
+    # stock_list = db_manager.get_stock_id_list(is_new=is_new)
+    # for stock in stock_list:
+    time.sleep(0.301)
+    stock_id = stock_id
+    print(stock_id)
+    location = location
+    newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
+    # 确保表存在 
+    table_name_td = f"is_{stock_id}"
+    TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',table_name_td,"income_statement",True)
 
-        tushare_data = tushare.get_income_statement(stock_id=newStockId,start_time=start_date,end_time=end_date)
-        TDEngineWriter.insert_income_statement(tushare_data=tushare_data,stock_id=stock_id)
+    tushare_data = tushare.get_income_statement(stock_id=newStockId,start_time=start_date,end_time=end_date)
+    TDEngineWriter.insert_income_statement(tushare_data=tushare_data,stock_id=stock_id,location=location)
         
 
-def dig_income_statment_yoy():
+def dig_income_statment_yoy(stock_id,location):
     setup_logger()
     db_manager = DBManager()
     report_date = date(2025, 6, 30).strftime('%Y%m%d')
-    stock_list = db_manager.get_stock_id_list()
+    # stock_list = db_manager.get_stock_id_list()
     tdreader = tdReader()
     
-    for stock in stock_list:
-        stock_id = stock.stock_id
-        print(stock_id+' get income statement yoy')
-        
-        # 确保表存在 
-        table_name_td = f"is_{stock_id}"
-        TDEngineWriter.create_dynamic_table("nb_stock", stock_id, stock.location,'', table_name_td, "income_statement_yoy", True)
-        # todo 获取 当季度的利润表数据，并做计算
-        xueqiu_current_data = tdreader.get_finance_report(stock_id=stock_id,report_date=report_date,report_type="income_statement")
-        if xueqiu_current_data:
-            TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_current_data)
+    # for stock in stock_list:
+    stock_id = stock_id
+    print(stock_id+' get income statement yoy')
+    
+    # 确保表存在 
+    table_name_td = f"is_yoy_{stock_id}"
+    TDEngineWriter.create_dynamic_table("nb_stock", stock_id, location,'', table_name_td, "income_statement_yoy", True)
+    # todo 获取 当季度的利润表数据，并做计算
+    xueqiu_current_data = tdreader.get_finance_report(stock_id=stock_id,report_date=report_date,report_type="income_statement")
+    if xueqiu_current_data:
+        TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_current_data)
 
 # 从tushare 获取资产负债表的数据，遍历每个股票，并捞取存入tdengine,
-def dig_balance_sheet(start_date,end_date):
+def dig_balance_sheet(stock_id,location,start_date,end_date,is_new):
     setup_logger()
     tushare = TushareService()
     db_manager = DBManager()
     # start_date = date(2025, 6, 1).strftime('%Y%m%d')
     # end_date = date(2025, 10, 2).strftime('%Y%m%d')
-    stock_list = db_manager.get_stock_id_list()
+    stock_list = db_manager.get_stock_id_list(is_new=is_new)
     
 
-    for stock in stock_list:
-        time.sleep(0.301)
-        stock_id = stock.stock_id
-        print(stock_id)
-        location = stock.location
-        newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
-        # 确保表存在 
-        table_name_td = f"bs_{stock_id}"
-        TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,'',table_name_td,"balance_sheets",True)
+    # for stock in stock_list:
+    time.sleep(0.301)
+    stock_id = stock_id
+    print(stock_id)
+    location = location
+    newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
+    # 确保表存在 
+    table_name_td = f"bs_{stock_id}"
+    TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',table_name_td,"balance_sheets",True)
 
-        tushare_data = tushare.get_balanceSheet(stock_id = newStockId,start_time=start_date,end_time=end_date)
-        TDEngineWriter.insert_balance_sheet(tushare_data=tushare_data,stock_id=stock_id,location= location)
+    tushare_data = tushare.get_balanceSheet(stock_id = newStockId,start_time=start_date,end_time=end_date)
+    TDEngineWriter.insert_balance_sheet(tushare_data=tushare_data,stock_id=stock_id,location= location)
 
 # 从tushare 获取现金流表的数据，遍历每个股票，并捞取存入tdengine,
-def dig_cash_flow_statement(start_date,end_date):
+def dig_cash_flow_statement(stock_id,location,start_date,end_date,is_new):
     setup_logger()
     tushare = TushareService()
     db_manager = DBManager()
     # start_date = date(2025, 6, 1).strftime('%Y%m%d')
     # end_date = date(2025, 10, 2).strftime('%Y%m%d')
-    stock_list = db_manager.get_stock_id_list()
+    # stock_list = db_manager.get_stock_id_list(is_new=is_new)
     
 
-    for stock in stock_list:
-        time.sleep(0.301)
-        stock_id = stock.stock_id
-        print(stock_id)
-        location = stock.location
-        newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
-        # 确保表存在
-        table_name_td = f"cfs_{stock_id}"
-        TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,'',table_name_td,"cash_flow_statements",True)
+    # for stock in stock_list:
+    time.sleep(0.301)
+    stock_id = stock_id
+    print(stock_id)
+    location = location
+    newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
+    # 确保表存在
+    table_name_td = f"cfs_{stock_id}"
+    TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',table_name_td,"cash_flow_statements",True)
 
-        tushare_data = tushare.get_cashflowstatement(stock_id = newStockId,start_time=start_date,end_time=end_date)
-        TDEngineWriter.insert_cash_flow_statement(tushare_data=tushare_data,stock_id=stock_id)
+    tushare_data = tushare.get_cashflowstatement(stock_id = newStockId,start_time=start_date,end_time=end_date)
+    TDEngineWriter.insert_cash_flow_statement(tushare_data=tushare_data,stock_id=stock_id,location=location)
         
-# 新股 1、获取从 上市日到当前日的 周级交易历史插入 per_day_fianl
-# 2、财报全量获取插入 tdengine
-# 支持港股、美股、A股
-def digNewStock(self):
+#   新股
+#   1、获取从 上市日到当前日的 缺失的 周级交易历史插入 per_day_fianl
+#   2、财报全量获取插入 tdengine
+#   支持港股、美股、A股
+def dig_new_stock_info():
     try:
         setup_logger()
         # 1.准备
         tushare = TushareService()
         db_manager = DBManager()
         
-        end_date = date(2025, 10, 25).strftime('%Y%m%d')
+        end_date = date(2025, 10, 31).strftime('%Y%m%d')
         stock_list = db_manager.get_new_stock_id_list()
+        print(f'stock_list={len(stock_list)}')
         print(stock_list)
         # tushare: daily_day,weekly_week,monthly_month
         input_str = "weekly_week"
@@ -329,6 +331,12 @@ def digNewStock(self):
                 
                 # todo  循环遍历
                 if raw_data is not None:
+                    # 查询数据库中 该 scope_type ,stock_id，trade_date 的per_day_final是否已经存在，没有就插入 tushare_data['trade_date']
+                    trade_dates_str = raw_data['trade_date'].iloc[0]
+                    db_exist = db_manager.get_stock_per_day(stock_id=stock_id,period=period_local,trade_date=trade_dates_str)
+                    if db_exist:
+                        continue
+                    
                     """同步数据到 mysql"""
                     db_ready_data = db_manager.convert_to_db_format_tushare(stock_id,raw_data,period_local)
                     
@@ -340,17 +348,22 @@ def digNewStock(self):
                     TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False)
                     
                     # 批量写入数据
-                    TDEngineWriter.write_daily_data_batch(
+                    TDEngineWriter.write_data_batch(
                         data=db_ready_data,
                         company_id=stock_id,
                         table_name = table_name_td
                     )
 
                 # 财报数据 获取并写入 tdengine
-                
-                dig_income_statment(start_date=start_date,end_date=end_date)
-                dig_balance_sheet(start_date=start_date,end_date=end_date)
-                
+                dig_income_statment(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
+                dig_balance_sheet(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
+                dig_cash_flow_statement(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
+                # todo 更新 is_new = 0
+                basic_info = {
+                    'stock_id': stock_id,
+                    'is_new': 0
+                }
+                db_manager.update_basic_info(basic_info)
         
     except Exception as e:
         logger.error(f"检查新增股票失败: {e}")

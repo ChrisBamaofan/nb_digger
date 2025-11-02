@@ -47,7 +47,7 @@ class CashFlowStatement:
             
             # 现金及现金等价物
             'eff_fx_flu_cash': 'effect_of_exchange_chg_on_cce',       # 汇率变动对现金的影响
-            'n_incr_cash_cash_equ': 'net_increase_in_cce',            # 现金及现金等价物净增加额
+            'n_incr_cash_cash_equ': 'net_increase_in_cce',            # 现金及现金等价物净增加额 222
             'c_cash_equ_beg_period': 'initial_balance_of_cce',        # 期初现金及现金等价物余额
             'c_cash_equ_end_period': 'final_balance_of_cce',          # 期末现金及现金等价物余额
             

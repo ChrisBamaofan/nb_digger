@@ -4,14 +4,19 @@
     is_new= 1 ,获取从上市到今天的week级别的per_day_final到mysql，获取历史财报数据及同比数据计算。
     接口支持 美股 A股 港股
 
-2   财报换 api
-    balance_sheet                  10/8完成 todo 测试
-    balance_sheet_yoy               10/9完成 todo 测试
-    cash_flow_statement             10/10完成 todo 测试
-    cash_flow_statement_yoy          10/11完成 todo 测试
+    todo 更新is_new
+    todo 重新跑一次 财报的yoy才能刷新
+    000691的财报  bs和  cfs yoy还要加载一次
     
-    新增一张tdengine表
+2   财报换 api
+    balance_sheet                  10/8完成 done 1102
+    balance_sheet_yoy               10/9完成 done 1102
+    cash_flow_statement             10/10完成 done 1102
+    cash_flow_statement_yoy          10/11完成 done 1102
+    
+    新增一张tdengine表 用来记录 扣非净利润增长率和换手率
     https://tushare.pro/document/2?doc_id=79  查询tushare的同比数据
+    
 
 3   港股 
     股票列表及周线信息              10/12
@@ -19,14 +24,18 @@
 4   美股 引入
 5   退市及st股票的列表              done
 
+
 6 	减持或增持期间
     https://tushare.pro/document/2?doc_id=175
-
+6.5 除权模块
 7 	监管
+
+
 8	概念列表			联系同花顺
 9   perdayfinal tdengine 中因为赋权 导致数据更新较慢，所以已经是脏数据了
 10  估值模型  我有1000w,凭什么你这个策略出来我可以每个票分配100w，或者一个票可以分配30w最多，这些都是由什么因素决定
-
+    权重越高的策略出来的票 越给多的安全边际，深入分析，满意回报
+    
 11 	实时计算根据日来计算周月季年
 12	缓存均线数据到数据库及redis
 

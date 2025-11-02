@@ -11,9 +11,9 @@ from finance_report.income_statement_yoy import IncomeStatementYOYCalculator
 class TDEngineWriter:
 
     @staticmethod
-    def write_daily_data_batch(data: pd.DataFrame, company_id: str,table_name:str):
+    def write_data_batch(data: pd.DataFrame, company_id: str, table_name: str):
         """
-        批量写入日线数据到TDEngine动态表(day_公司ID)
+        批量写入数据到TDEngine动态表(day_公司ID)
         :param data: 包含交易数据的DataFrame
         :param company_id: 公司ID (如: 000001)
         """
@@ -22,11 +22,21 @@ class TDEngineWriter:
             return False
         
         try:
+            # 清理数据，替换NaN值为0
+            cleaned_data = data.copy()
+            numeric_columns = ['amount', 'volume', 'start_price', 'end_price', 'high_price', 'low_price', 
+                            'change_price', 'change_percent', 'turnover_ratio']
+            
+            for col in numeric_columns:
+                if col in cleaned_data.columns:
+                    cleaned_data[col] = pd.to_numeric(cleaned_data[col], errors='coerce').fillna(0)
+            
             sql_values = []
-            for _, row in data.iterrows():
+            for _, row in cleaned_data.iterrows():
                 # 格式化时间戳为TDEngine兼容格式
                 trade_date = pd.to_datetime(row['trade_date']).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                # 构建单行数据SQL片段
+                
+                # 构建单行数据SQL片段，确保所有数值都是有效的
                 value_str = f"('{date_utils.prepare_timestamp(trade_date)}', " \
                             f"{int(row['amount'])}, " \
                             f"{int(row['volume'])}, " \
@@ -53,6 +63,9 @@ class TDEngineWriter:
             return True
         except Exception as e:
             log.error(f"TDEngine批量写入失败: {e}")
+            # 添加调试信息
+            if not data.empty:
+                log.debug(f"前3行数据样例: {data[['trade_date', 'start_price', 'end_price', 'high_price', 'low_price']].head(3).to_dict('records')}")
             return False
     
     @staticmethod
@@ -142,7 +155,7 @@ class TDEngineWriter:
             raise
 
     @staticmethod
-    def insert_income_statement(tushare_data,stock_id:str):
+    def insert_income_statement(tushare_data,stock_id:str,location):
         
         # 映射到雪球结构
         for _, row in tushare_data.iterrows():
@@ -209,7 +222,8 @@ class TDEngineWriter:
                 )
             """
             tdengine.execute(sql)
-            TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+            # TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"is_yoy_{stock_id}","income_statement_yoy",True)
+            # TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
 
     @staticmethod
     def insert_income_statement_yoy(stock_id,xueqiu_mapped_data):
@@ -320,7 +334,7 @@ class TDEngineWriter:
                 lt_payable_sum, noncurrent_liab_di, perpetual_bond, special_reserve, 
                 create_date)
                 VALUES (
-                    {utc_ts},
+                    '{utc_ts}',
                     '{xueqiu_mapped_data.get('report_name') or 'NULL'}',
                     {xueqiu_mapped_data.get('ctime') or 'NULL'},
                     {xueqiu_mapped_data.get('total_assets') or 'NULL'},
@@ -410,13 +424,13 @@ class TDEngineWriter:
                     {xueqiu_mapped_data.get('noncurrent_liab_di') or 'NULL'},
                     {xueqiu_mapped_data.get('perpetual_bond') or 'NULL'},
                     {xueqiu_mapped_data.get('special_reserve') or 'NULL'},
-                    '{xueqiu_mapped_data.get('create_date') or 'NULL'}'
+                    NOW
                 )
             """
             tdengine.execute(sql)
             
-            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"bs_yoy_{stock_id}","balance_sheets_growth",True)
-            TDEngineWriter.insert_balance_sheet_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+            # TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"bs_yoy_{stock_id}","balance_sheets_growth",True)
+            # TDEngineWriter.insert_balance_sheet_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
 
     
     @staticmethod
@@ -439,7 +453,7 @@ class TDEngineWriter:
             sql = f"""
                 INSERT INTO cfs_{stock_id} 
                 VALUES (
-                    {utc_ts},
+                    '{utc_ts}',
                     {format_sql_value(data.get('report_name'))},
                     {format_sql_value(data.get('ctime'))},
                     {format_sql_value(data.get('ncf_from_oa'))},
@@ -480,10 +494,10 @@ class TDEngineWriter:
                     {format_sql_value(data.get('refund_of_tax_and_levies'))},
                     {format_sql_value(data.get('goods_buy_and_service_cash_pay'))},
                     {format_sql_value(data.get('net_cash_amt_from_branch'))},
-                    {format_sql_value(data.get('create_date'))}
+                    NOW
                 )
             """
             tdengine.execute(sql)
             
-            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"cfs_yoy_{stock_id}","cash_flow_statements_growth",True)
-            TDEngineWriter.insert_cash_flow_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=data)
+            # TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"cfs_yoy_{stock_id}","cash_flow_statements_growth",True)
+            # TDEngineWriter.insert_cash_flow_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=data)
