@@ -83,4 +83,4 @@ if __name__ == "__main__":
     # 2. HK stock list , basic_info, finance_report,
     # 3. USA stock list, basic_info, finance_report
     # updateRetiredStocks()
-    # updateNewStocks()
+    updateNewStocks()

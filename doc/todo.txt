@@ -6,7 +6,7 @@
 
     todo 更新is_new
     todo 重新跑一次 财报的yoy才能刷新
-    000691的财报  bs和  cfs yoy还要加载一次
+    000691的财报  bs和  cfs yoy 还要加载一次
     
 2   财报换 api
     balance_sheet                  10/8完成 done 1102
@@ -48,3 +48,5 @@
 
     2）更新mysql的basic
     3）更新 mysql的 perdayFianl
+
+
