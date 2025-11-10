@@ -32,7 +32,7 @@ class IncomeStatementYOYCalculator:
     current_data: 当前期间数据 (如2025中报)
     previous_data: 去年同期数据 (如2024中报)
     """
-    def calculate_yoy_growth(self, current_data: Dict, previous_data: Dict,stock_id:str) -> Dict:
+    def calculate_yoy_growth(self, current_data: Dict, previous_data: Dict,stock_id:str,num_dict:Dict) -> Dict:
        
         yoy_data = {}
         ts = DateUtils.format_date_to_ymd(current_data.get('ts') )
@@ -43,7 +43,7 @@ class IncomeStatementYOYCalculator:
         yoy_data['report_name'] = current_data.get('report_name')
         yoy_data['ctime'] = current_data.get('ctime')
         
-        for field in self.numeric_fields:
+        for field in num_dict:
             current_value = current_data.get(field)
             previous_value = previous_data.get(field)
             

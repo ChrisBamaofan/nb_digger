@@ -6,6 +6,7 @@ from .tdengine_connector import tdengine
 from utils.logger import log
 from utils.date_utils import date_utils
 from utils.finance_util import map_tushare_to_xueqiu,generate_report_name,map_tushare_to_xueqiu_balance,map_tushare_to_xueqiu_cashflowstatment
+from finance_report.balance_sheet import BalanceSheet
 from finance_report.income_statement_yoy import IncomeStatementYOYCalculator
 
 class TDEngineWriter:
@@ -69,7 +70,7 @@ class TDEngineWriter:
             return False
     
     @staticmethod
-    def create_dynamic_table(db:str,company_id: str, location:str, scope:str ,table_name:str,stable:str ,fin:bool):
+    def create_dynamic_table(db:str,company_id: str, location:str, scope:str ,table_name:str,stable:str ,fin:bool,currency:str):
         values = []
         values.append(location)
         values.append(company_id)
@@ -78,8 +79,8 @@ class TDEngineWriter:
         try:
             if fin:
                 formatted_sql = f"""
-                CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} (`company_id`, `location`)  TAGS (
-                    '{company_id}', '{location}'
+                CREATE TABLE IF NOT EXISTS {db}.{table_name} USING {stable} (`company_id`, `location`, `currency`)  TAGS (
+                    '{company_id}', '{location}','{currency}'
                 )
                 """.strip().replace('\n', ' ')
             else:
@@ -92,7 +93,6 @@ class TDEngineWriter:
             log.info(f"Executing SQL:\n{formatted_sql}")
             
             tdengine.execute(formatted_sql)
-            # log.info(f"TDEngine动态表 {db}.{table_name} 已创建/确认存在")
             return True
         except Exception as e:
             log.error(f"TDEngine表创建失败: {e}")
@@ -222,8 +222,8 @@ class TDEngineWriter:
                 )
             """
             tdengine.execute(sql)
-            # TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"is_yoy_{stock_id}","income_statement_yoy",True)
-            # TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"is_yoy_{stock_id}","income_statement_yoy",True,"RMB")
+            TDEngineWriter.insert_income_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
 
     @staticmethod
     def insert_income_statement_yoy(stock_id,xueqiu_mapped_data):
@@ -233,7 +233,7 @@ class TDEngineWriter:
         previous_data = calculator.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'],report_type='income_statement')
         
         if previous_data:
-            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id)
+            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id,num_dict=calculator.numeric_fields)
             
             TDEngineWriter._insert_income_statement_yoy(yoy_type='is',yoy_data=yoy_data,stock_id=stock_id)
         else:
@@ -243,12 +243,13 @@ class TDEngineWriter:
     @staticmethod
     def insert_balance_sheet_yoy(stock_id,xueqiu_mapped_data):
         # yoy
-        calculator = IncomeStatementYOYCalculator()
+        calculator = BalanceSheet()
+        calculator2 = IncomeStatementYOYCalculator
         # 计算 yoy
-        previous_data = calculator.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'],report_type='balance_sheets')
+        previous_data = calculator2.get_previous_period_data(stock_id = stock_id,current_end_date =xueqiu_mapped_data['ts'],report_type='balance_sheets')
         
         if previous_data:
-            yoy_data = calculator.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id)
+            yoy_data = calculator2.calculate_yoy_growth(current_data = xueqiu_mapped_data, previous_data = previous_data,stock_id=stock_id,num_dict=calculator.field_mapping)
             
             TDEngineWriter._insert_income_statement_yoy(yoy_type='bs',yoy_data=yoy_data,stock_id=stock_id)
         else:
@@ -429,8 +430,8 @@ class TDEngineWriter:
             """
             tdengine.execute(sql)
             
-            # TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"bs_yoy_{stock_id}","balance_sheets_growth",True)
-            # TDEngineWriter.insert_balance_sheet_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
+            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"bs_yoy_{stock_id}","balance_sheets_growth",True,"RMB")
+            TDEngineWriter.insert_balance_sheet_yoy(stock_id=stock_id,xueqiu_mapped_data=xueqiu_mapped_data)
 
     
     @staticmethod
@@ -499,5 +500,5 @@ class TDEngineWriter:
             """
             tdengine.execute(sql)
             
-            # TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"cfs_yoy_{stock_id}","cash_flow_statements_growth",True)
-            # TDEngineWriter.insert_cash_flow_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=data)
+            TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"cfs_yoy_{stock_id}","cash_flow_statements_growth",True,"RMB")
+            TDEngineWriter.insert_cash_flow_statement_yoy(stock_id=stock_id,xueqiu_mapped_data=data)

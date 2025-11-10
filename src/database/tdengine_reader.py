@@ -77,6 +77,51 @@ class TDEngineReader:
             print(f"查询去年同期数据失败: {e}")
             return {}
     
+    def get_finance_report_all(self, stock_id,report_type:str) -> Dict:
+        """
+        获取去年同期数据
+        current_end_date: 当前报告期 (如 '2025-06-30')
+        company_id: 公司ID
+        """
+        # report_date = pd.to_datetime(report_date)
+        
+        if report_type == 'income_statement_tushare':
+            t_prefix = 'is_tsh'
+        elif report_type == 'balance_sheets_tushare':
+            t_prefix = 'bs_tsh'
+        elif report_type == 'cash_flow_statements_tushare':
+            t_prefix = 'cfs_tsh'
+        elif report_type == 'income_statement_yoy_tushare':
+            t_prefix = 'is_yoy_tsh'
+        elif report_type == 'balance_sheets_yoy_tushare':
+            t_prefix = 'bs_yoy_tsh'
+        elif report_type == 'cash_flow_statements_yoy_tushare':
+            t_prefix = 'cfs_yoy_tsh'
+        else:
+            return {}
+
+        # report_date = tdengine._convert_to_utc(report_date)
+        # print(report_date)
+
+        # 从TDengine查询去年同期数据
+        try:
+            result = tdengine.conn.query(f"""
+                SELECT * FROM {t_prefix}_{stock_id} 
+            """)
+            
+            if result:
+                data_list = []
+                for row in result:
+                    data_list.append(self._result_to_dict(row))
+                return data_list if data_list else []
+            else:
+                print(f"未找到去年同期数据: {stock_id}")
+                return {}
+                
+        except Exception as e:
+            print(f"查询去年同期数据失败: {e}")
+            return {}
+        
     def _result_to_dict(self, result_row) -> Dict:
         data = {}
     

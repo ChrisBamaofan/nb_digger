@@ -86,6 +86,80 @@ class TDEngineConnector:
     
     def __del__(self):
         self.close()
+        
+    @staticmethod
+    def _format_sql_value(value):
+        """
+        格式化SQL值，处理NaN、None、无穷大等特殊值
+        
+        Args:
+            value: 需要格式化的值，可以是数字、字符串、None、NaN等
+            
+        Returns:
+            str: 格式化后的SQL值，可以直接用于INSERT语句
+        """
+        # 处理None值
+        if value is None:
+            return 'NULL'
+        
+        # 处理pandas的NaN值
+        if pd.isna(value):
+            return 'NULL'
+        
+        # 处理numpy的NaN值
+        try:
+            import numpy as np
+            if np.isnan(value):
+                return 'NULL'
+        except (ImportError, TypeError):
+            pass
+        
+        # 处理无穷大值
+        try:
+            if float(value) == float('inf'):
+                return 'NULL'
+            if float(value) == float('-inf'):
+                return 'NULL'
+        except (ValueError, TypeError):
+            pass
+        
+        # 处理字符串类型 - 需要转义单引号
+        if isinstance(value, str):
+            # 转义单引号（SQL注入防护）
+            escaped_value = value.replace("'", "''")
+            return f"'{escaped_value}'"
+        
+        # 处理布尔值
+        if isinstance(value, bool):
+            return '1' if value else '0'
+        
+        # 处理整数和浮点数
+        if isinstance(value, (int, float)):
+            # 确保数值在合理范围内
+            try:
+                float_value = float(value)
+                # 检查是否为有限数（非NaN、非无穷大）
+                if not np.isfinite(float_value):
+                    return 'NULL'
+                return str(float_value)
+            except (ValueError, TypeError):
+                return 'NULL'
+        
+        # 处理datetime对象
+        if isinstance(value, (datetime, pd.Timestamp)):
+            try:
+                # 转换为TDengine支持的格式
+                return f"'{value.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}'"
+            except:
+                return 'NULL'
+        
+        # 处理其他类型（如列表、字典等）- 转换为字符串
+        try:
+            str_value = str(value)
+            escaped_value = str_value.replace("'", "''")
+            return f"'{escaped_value}'"
+        except:
+            return 'NULL'
 
 # 单例实例
 tdengine = TDEngineConnector()

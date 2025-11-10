@@ -73,14 +73,15 @@ if __name__ == "__main__":
     # 除权
     # 每周交易数据
     ts = TushareService()
-    # ts.update_basic_get_stock()
+    ts.update_basic_get_stock()
     # ts.getBJStock(stock_id='430418')
-    dig_data.dig_new_stock_info()
-    # dig_data.dig_income_statment()
-    # dig_data.dig_income_statment_yoy()
-    # dig_data.dig_balance_sheet()
+    # dig_data.dig_balance_sheet(stock_id='001277',location='china.shenzhen',start_date='2022-01-17 00:00:00',end_date='2025-10-31 00:00:00',is_new=1)
+    # dig_data.dig_new_stock_info()
+    dig_data.dig_income_statment_tushare()
+    dig_data.dig_income_statment_yoy_tushare()
+    dig_data.dig_balance_sheet()
     # dig_data.dig_cash_flow_statement()
     # 2. HK stock list , basic_info, finance_report,
     # 3. USA stock list, basic_info, finance_report
     # updateRetiredStocks()
-    updateNewStocks()
+    # updateNewStocks()

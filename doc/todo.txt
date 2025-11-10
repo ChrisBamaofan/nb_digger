@@ -4,9 +4,11 @@
     is_new= 1 ,获取从上市到今天的week级别的per_day_final到mysql，获取历史财报数据及同比数据计算。
     接口支持 美股 A股 港股
 
-    todo 更新is_new
-    todo 重新跑一次 财报的yoy才能刷新
-    000691的财报  bs和  cfs yoy 还要加载一次
+    ！！！balance_sheet的 字段映射是否检查一下，BalanceSheet.py 和 tdengine的建表语句不一致
+
+    todo 更新 is_new
+    todo 重新跑一次 财报的 yoy 才能刷新
+    000691的财报  bs 和  cfs yoy 还要加载一次
     
 2   财报换 api
     balance_sheet                  10/8完成 done 1102
