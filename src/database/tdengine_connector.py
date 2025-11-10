@@ -6,6 +6,7 @@ from utils.config_loader import load_config
 from taosrest import TaosRestConnection
 from datetime import datetime, timedelta
 import pytz
+import pandas as pd 
 
 class TDEngineConnector:
     def __init__(self):

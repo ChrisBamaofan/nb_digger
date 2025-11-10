@@ -3,6 +3,7 @@ from database.db_manager import DBManager
 from datasource.tushare_client import TushareService
 from utils.logger import setup_logger,log
 from datetime import date
+from datetime import datetime
 from database.tdengine_writer import TDEngineWriter
 from database.tdengine_tushare_writer import TDEngineTushareWriter
 import time
@@ -207,7 +208,7 @@ def dig_new_per_data():
                     table_name = table_name_td
                 )
 
-def dig_income_statment_tushare(start_date,end_date):
+def dig_income_statment_tushare():
     setup_logger()
     tushare = TushareService()
     db_manager = DBManager()
@@ -217,18 +218,20 @@ def dig_income_statment_tushare(start_date,end_date):
         time.sleep(0.301)
         stock_id = stock.stock_id
         location = stock.location
+        start_date = datetime.strptime('2010-01-01', '%Y-%m-%d').strftime('%Y%m%d')
+        end_date = datetime.strptime('2025-11-10', '%Y-%m-%d').strftime('%Y%m%d')
         print(stock_id)
         newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
         # 确保表存在 
         TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"is_tsh_{stock_id}","income_statement_tushare",True,"RMB")
 
         tushare_data = tushare.get_income_statement(stock_id=newStockId,start_time=start_date,end_time=end_date)
-        TDEngineTushareWriter.insert_income_statement_tushare(tushare_data=tushare_data,stock_id=stock_id,location=location)
+        TDEngineTushareWriter.insert_income_statement_tushare(tushare_data=tushare_data,stock_id=stock_id)
 
 # 1、遍历所有股票
 # 2、查看是否有利润表的数据，加载所有历史利润数据，或者某一期的利润表数据
 # 3、计算本期与上一期的各个数值字段的同比变化值，并插入利润表同比变化表
-def dig_income_statment_yoy_tushare(stock_id,location):
+def dig_income_statment_yoy_tushare():
     setup_logger()
     db_manager = DBManager()
     
@@ -238,6 +241,7 @@ def dig_income_statment_yoy_tushare(stock_id,location):
     
     for stock in stock_list:
         current_stock_id = stock.stock_id
+        location = stock.location
         logging.info(f'{current_stock_id} - 开始计算利润表同比')
         try:
             is_reports = tdreader.get_finance_report_all(stock_id=current_stock_id, report_type="income_statement_tushare")
@@ -247,7 +251,7 @@ def dig_income_statment_yoy_tushare(stock_id,location):
                 continue
             
             # 按报告期排序
-            is_reports_sorted = sorted(is_reports, key=lambda x: x.get('end_date', ''))
+            is_reports_sorted = sorted(is_reports, key=lambda x: x.get('end_date', ''), reverse=True)
             
             # 2、计算同比变化
             for i in range(1, len(is_reports_sorted)):

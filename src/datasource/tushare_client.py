@@ -440,7 +440,7 @@ class TushareService:
         try:
             td_table = f'{type}_{stock.stock_id}'
             new_td_table = f'{type}_{n_code}'
-            TDEngineWriter.create_dynamic_table(db='nb_stock',company_id=n_code,location=stock.location,scope='',table_name=new_td_table,stable=fin_type,fin=True,"RMB")
+            TDEngineWriter.create_dynamic_table('nb_stock',n_code,stock.location,'',new_td_table,fin_type,True,"RMB")
             query = f'select * from {td_table}'
             result = tdengine.execute(query)
             if(result):

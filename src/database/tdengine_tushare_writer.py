@@ -1,5 +1,6 @@
 from database.tdengine_connector import tdengine
 import pandas as pd
+from datetime import datetime
 
 class TDEngineTushareWriter:
     
@@ -13,6 +14,7 @@ class TDEngineTushareWriter:
             # 转换时间戳
             # 使用报告期末日期作为时间戳，格式化为YYYY-MM-DD HH:MM:SS.MS
             report_date = row['end_date']
+            report_date = datetime.strptime(report_date, '%Y%m%d').strftime('%Y-%m-%d')
             utc_ts = tdengine._convert_to_utc2(report_date)
             
             # 构建插入SQL
@@ -20,7 +22,7 @@ class TDEngineTushareWriter:
                 INSERT INTO is_tsh_{stock_id}
                 VALUES (
                     '{utc_ts}',                                 
-                    '{row['ts_code'] or ''}',
+                    '{stock_id}',
                     '{row['ann_date'] or ''}', 
                     '{row['f_ann_date'] or ''}', 
                     '{row['end_date'] or ''}',
