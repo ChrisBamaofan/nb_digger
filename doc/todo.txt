@@ -52,3 +52,6 @@
     3）更新 mysql的 perdayFianl
 
 
+
+java项目  前端项目   k8s部署   数据库   本地服务器搭建    网络打通   域名购买    
+安全性   通过 istio或者 k8s实现，或者直接通过istio部署

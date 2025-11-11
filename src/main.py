@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # ts.getBJStock(stock_id='430418')
     # dig_data.dig_balance_sheet(stock_id='001277',location='china.shenzhen',start_date='2022-01-17 00:00:00',end_date='2025-10-31 00:00:00',is_new=1)
     # dig_data.dig_new_stock_info()
-    # dig_data.dig_income_statment_tushare()
+    dig_data.dig_income_statment_tushare()
     dig_data.dig_income_statment_yoy_tushare()
     dig_data.dig_balance_sheet()
     # dig_data.dig_cash_flow_statement()

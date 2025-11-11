@@ -219,6 +219,8 @@ def dig_income_statment_tushare():
         stock_id = stock.stock_id
         location = stock.location
         start_date = datetime.strptime('2010-01-01', '%Y-%m-%d').strftime('%Y%m%d')
+        if stock.launch_date < start_date :
+            start_date = stock.launch_date.strftime('%Y%m%d')
         end_date = datetime.strptime('2025-11-10', '%Y-%m-%d').strftime('%Y%m%d')
         print(stock_id)
         newStockId = TushareService.convert_stock_id(stock_id=stock_id,location=location)
