@@ -253,17 +253,17 @@ def dig_income_statment_yoy_tushare():
                 continue
             
             # 按报告期排序
-            is_reports_sorted = sorted(is_reports, key=lambda x: x.get('end_date', ''), reverse=True)
+            is_reports_sorted = sorted(is_reports, key=lambda x: x.get('ts', ''),reverse=True)
             
             # 2、计算同比变化
-            for i in range(1, len(is_reports_sorted)):
+            for i in range(0, len(is_reports_sorted)):
                 current_report = is_reports_sorted[i]
                 previous_report = finance_reporter.find_comparable_report(is_reports_sorted, current_report, i)
                 
                 if previous_report:
                     # 确保表存在
                     table_name_td = f"is_yoy_tsh_{current_stock_id}"
-                    TDEngineWriter.create_dynamic_table("nb_stock", current_stock_id, location, '',  table_name_td, "income_statement_yoy", True, "RMB")
+                    TDEngineWriter.create_dynamic_table("nb_stock", current_stock_id, location, '',  table_name_td, "income_statement_yoy_tushare", True, "RMB")
                     
                     # 3、计算同比并插入数据
                     finance_reporter.insert_income_statement_yoy_tushare(

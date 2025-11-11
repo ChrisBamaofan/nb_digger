@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from utils.logger import setup_logger,log
 from database.tdengine_connector import tdengine
+from finance_report.finance_report_constant import FinanceReportConstant
 
 class FinanceReportTushare:
 
@@ -10,9 +11,9 @@ class FinanceReportTushare:
         pass
     
     # debug *****
-    def find_comparable_report(reports: List[Dict], current_report: Dict, current_index: int) -> Optional[Dict]:
+    def find_comparable_report(self, reports: List[Dict], current_report: Dict, current_index: int) -> Optional[Dict]:
         """
-        找到可比较的上一期报告（去年同期）
+        找到去年同期的报告数据
         
         Args:
             reports: 排序后的报告列表
@@ -20,33 +21,28 @@ class FinanceReportTushare:
             current_index: 当前报告在列表中的索引
             
         Returns:
-            Optional[Dict]: 可比较的上一期报告，如果没有返回None
+            Optional[Dict]: 去年同期的报告，如果没有返回None
         """
         try:
             current_end_date = current_report.get('end_date')
             if not current_end_date:
                 return None
             
-            current_date = datetime.strptime(current_end_date, '%Y%m%d')
+            # 当前报告的年月 (如: 202409 -> 2024年9月)
+            current_year_month = current_end_date[:6]  # 取前6位 YYYYMM
             
-            # 寻找去年同期报告（去年同季度）
-            for i in range(current_index - 1, -1, -1):
-                report = reports[i]
-                report_end_date = report.get('end_date')
-                if not report_end_date:
-                    continue
-                    
-                report_date = datetime.strptime(report_end_date, '%Y%m%d')
-                
-                # 检查是否是去年同期（年份差1，月份和季度相同）
-                if (current_date.year - report_date.year == 1 and 
-                    current_date.month == report_date.month):
+            # 计算去年同期的年月
+            current_year = int(current_year_month[:4])
+            current_month = current_year_month[4:]
+            last_year = current_year - 1
+            last_year_month = f"{last_year}{current_month}"  # 如: 202309
+            
+            # 在报告中查找去年同期的数据
+            for report in reports:
+                report_end_date = report.get('end_date', '')
+                if report_end_date.startswith(last_year_month):
                     return report
             
-            # 如果没有找到完全匹配的去年同期，找最接近的上一期报告
-            if current_index > 0:
-                return None
-                
             return None
             
         except Exception as e:
@@ -65,7 +61,7 @@ class FinanceReportTushare:
         """
         try:
             # 计算同比变化
-            yoy_data = self.calculate_income_yoy(current_report, previous_report)
+            yoy_data = self.calculate_income_yoy_tushare(current_report, previous_report)
             
             if not yoy_data:
                 log.warning(f"{stock_id} - 无法计算同比数据")
@@ -81,14 +77,12 @@ class FinanceReportTushare:
         except Exception as e:
             log.error(f"{stock_id} - 插入同比数据时出错: {e}")
             
-    def calculate_income_yoy(self,current_report: Dict, previous_report: Dict) -> Dict:
+    def calculate_income_yoy_tushare(self,current_report: Dict, previous_report: Dict) -> Dict:
         """
         计算利润表各项指标的同比变化
-        
         Args:
             current_report: 当期报告
             previous_report: 上期报告
-            
         Returns:
             Dict: 包含同比变化数据的字典
         """
@@ -97,34 +91,10 @@ class FinanceReportTushare:
             'end_date': current_report.get('end_date'),
             'report_type': current_report.get('report_type')
         }
+        finance_report_constant = FinanceReportConstant()
+        # 
         
-        # 定义需要计算同比的数值字段
-        numeric_fields = [
-            'basic_eps', 'diluted_eps', 'total_revenue', 'revenue', 'int_income', 
-            'prem_earned', 'comm_income', 'n_commis_income', 'n_oth_income', 
-            'n_oth_b_income', 'prem_income', 'out_prem', 'une_prem_reser', 
-            'reins_income', 'n_sec_tb_income', 'n_sec_uw_income', 'n_asset_mg_income', 
-            'oth_b_income', 'fv_value_chg_gain', 'invest_income', 'ass_invest_income', 
-            'forex_gain', 'total_cogs', 'oper_cost', 'int_exp', 'comm_exp', 
-            'biz_tax_surchg', 'sell_exp', 'admin_exp', 'fin_exp', 'assets_impair_loss', 
-            'prem_refund', 'compens_payout', 'reser_insur_liab', 'div_payt', 
-            'reins_exp', 'oper_exp', 'compens_payout_refu', 'insur_reser_refu', 
-            'reins_cost_refund', 'other_bus_cost', 'operate_profit', 'non_oper_income', 
-            'non_oper_exp', 'nca_disploss', 'total_profit', 'income_tax', 'n_income', 
-            'n_income_attr_p', 'minority_gain', 'oth_compr_income', 't_compr_income', 
-            'compr_inc_attr_p', 'compr_inc_attr_m_s', 'ebit', 'ebitda', 'insurance_exp', 
-            'undist_profit', 'distable_profit', 'rd_exp', 'fin_exp_int_exp', 
-            'fin_exp_int_inc', 'transfer_surplus_rese', 'transfer_housing_imprest', 
-            'transfer_oth', 'adj_lossgain', 'withdra_legal_surplus', 'withdra_legal_pubfund', 
-            'withdra_biz_devfund', 'withdra_rese_fund', 'withdra_oth_ersu', 
-            'workers_welfare', 'distr_profit_shrhder', 'prfshare_payable_dvd', 
-            'comshare_payable_dvd', 'capit_comstock_div', 'net_after_nr_lp_correct', 
-            'credit_impa_loss', 'net_expo_hedging_benefits', 'oth_impair_loss_assets', 
-            'total_opcost', 'amodcost_fin_assets', 'oth_income', 'asset_disp_income', 
-            'continued_net_profit', 'end_net_profit'
-        ]
-        
-        for field in numeric_fields:
+        for field in finance_report_constant.is_numeric_fields:
             current_value = current_report.get(field)
             previous_value = previous_report.get(field)
             

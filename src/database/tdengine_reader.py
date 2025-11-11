@@ -3,6 +3,7 @@ import pandas as pd
 from typing import List, Dict
 from .tdengine_connector import tdengine
 from database.tdengine_connector import tdengine
+from finance_report.finance_report_constant import FinanceReportConstant
 
 class TDEngineReader:
 
@@ -83,25 +84,40 @@ class TDEngineReader:
         current_end_date: 当前报告期 (如 '2025-06-30')
         company_id: 公司ID
         """
-        # report_date = pd.to_datetime(report_date)
-        
-        if report_type == 'income_statement_tushare':
-            t_prefix = 'is_tsh'
-        elif report_type == 'balance_sheets_tushare':
-            t_prefix = 'bs_tsh'
-        elif report_type == 'cash_flow_statements_tushare':
-            t_prefix = 'cfs_tsh'
-        elif report_type == 'income_statement_yoy_tushare':
-            t_prefix = 'is_yoy_tsh'
-        elif report_type == 'balance_sheets_yoy_tushare':
-            t_prefix = 'bs_yoy_tsh'
-        elif report_type == 'cash_flow_statements_yoy_tushare':
-            t_prefix = 'cfs_yoy_tsh'
-        else:
+        finance_report_constant =  FinanceReportConstant()
+        # 定义表前缀和对应字段的映射
+        table_config = {
+            'income_statement_tushare': {
+                'prefix': 'is_tsh',
+                'fields': finance_report_constant.is_fields_all  # 利润表字段
+            },
+            'balance_sheets_tushare': {
+                'prefix': 'bs_tsh', 
+                'fields': finance_report_constant.bs_numeric_fields  # 资产负债表字段
+            },
+            'cash_flow_statements_tushare': {
+                'prefix': 'cfs_tsh',
+                'fields': finance_report_constant.cfs_numeric_fields  # 现金流量表字段
+            },
+            'income_statement_yoy_tushare': {
+                'prefix': 'is_yoy_tsh',
+                'fields': finance_report_constant.is_numeric_fields  # 利润表同比字段
+            },
+            'balance_sheets_yoy_tushare': {
+                'prefix': 'bs_yoy_tsh',
+                'fields': finance_report_constant.bs_numeric_fields  # 资产负债表同比字段
+            },
+            'cash_flow_statements_yoy_tushare': {
+                'prefix': 'cfs_yoy_tsh',
+                'fields': finance_report_constant.cfs_numeric_fields  # 现金流量表同比字段
+            }
+        }
+        if report_type not in table_config:
             return {}
-
-        # report_date = tdengine._convert_to_utc(report_date)
-        # print(report_date)
+        
+        config = table_config[report_type]
+        t_prefix = config['prefix']
+        fields = config['fields']
 
         # 从TDengine查询去年同期数据
         try:
@@ -112,7 +128,7 @@ class TDEngineReader:
             if result:
                 data_list = []
                 for row in result:
-                    data_list.append(self._result_to_dict(row))
+                    data_list.append(self._result_to_dict(row,fields))
                 return data_list if data_list else []
             else:
                 print(f"未找到去年同期数据: {stock_id}")
@@ -122,14 +138,15 @@ class TDEngineReader:
             print(f"查询去年同期数据失败: {e}")
             return {}
         
-    def _result_to_dict(self, result_row) -> Dict:
+    def _result_to_dict(self, result_row,fields=None) -> Dict:
+        """将查询结果转换为字典"""
+        if fields is None:
+            fields = self.is_numeric_fields 
+        
         data = {}
-    
-        # 使用索引访问，就像官方例子中的 row[0], row[1], row[2]
-        for i, field in enumerate(self.is_numeric_fields):
+        for i, field in enumerate(fields):
             if i < len(result_row):
                 data[field] = result_row[i]
             else:
                 data[field] = None
-        print(data)
         return data
