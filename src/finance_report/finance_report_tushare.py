@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from utils.logger import setup_logger,log
 from database.tdengine_connector import tdengine
 from finance_report.finance_report_constant import FinanceReportConstant
+import pandas as pd
 
 class FinanceReportTushare:
 
@@ -108,7 +109,7 @@ class FinanceReportTushare:
         
         return yoy_data
     
-    def calculate_change(current_value, previous_value, change_type: str):
+    def calculate_change(self,current_value, previous_value, change_type: str):
         """
         计算变化值
         
@@ -156,11 +157,13 @@ class FinanceReportTushare:
         """
         # 使用报告期末日期作为时间戳
         end_date = yoy_data['end_date']
-        ts = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]} 00:00:00.000"
+        end_date = datetime.strptime(end_date, '%Y%m%d').strftime('%Y-%m-%d')
+        utc_ts = tdengine._convert_to_utc2(end_date)
+        # ts = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]} 00:00:00.000"
         
         sql = f"""
             INSERT INTO is_yoy_tsh_{stock_id} VALUES (
-                '{ts}',
+                '{utc_ts}',
                 '{yoy_data['ts_code'] or ''}',
                 '{yoy_data['end_date'] or ''}',
                 '{yoy_data['report_type'] or ''}',
@@ -180,7 +183,6 @@ class FinanceReportTushare:
                 {self._format_sql_value(yoy_data.get('basic_eps_pct_yoy'))},
                 {self._format_sql_value(yoy_data.get('diluted_eps_abs_yoy'))},
                 {self._format_sql_value(yoy_data.get('diluted_eps_pct_yoy'))},
-                -- 补充所有其他数值字段的同比
                 {self._format_sql_value(yoy_data.get('int_income_abs_yoy'))},
                 {self._format_sql_value(yoy_data.get('int_income_pct_yoy'))},
                 {self._format_sql_value(yoy_data.get('prem_earned_abs_yoy'))},
@@ -337,7 +339,6 @@ class FinanceReportTushare:
                 {self._format_sql_value(yoy_data.get('continued_net_profit_pct_yoy'))},
                 {self._format_sql_value(yoy_data.get('end_net_profit_abs_yoy'))},
                 {self._format_sql_value(yoy_data.get('end_net_profit_pct_yoy'))},
-                -- 当前期实际数值
                 {self._format_sql_value(current_report.get('total_revenue'))},
                 {self._format_sql_value(current_report.get('revenue'))},
                 {self._format_sql_value(current_report.get('n_income'))},
@@ -348,10 +349,16 @@ class FinanceReportTushare:
             """
         return sql
 
-    def _format_sql_value(value):
-        """格式化SQL值"""
-        if value is None or pd.isna(value):
+    def _format_sql_value(self, value):
+        """格式化SQL值，处理负数值"""
+        if value is None:
             return 'NULL'
-        if isinstance(value, str):
+        elif isinstance(value, (int, float)):
+            # 对于负数值，确保前面有空格
+            sql_value = str(value)
+            if sql_value.startswith('-'):
+                return ' ' + sql_value  # 在负号前加空格
+            else:
+                return sql_value
+        else:
             return f"'{value}'"
-        return str(value)

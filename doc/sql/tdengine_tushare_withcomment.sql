@@ -449,3 +449,90 @@ CREATE STABLE IF NOT EXISTS cash_flow_tushare (
     company_id VARCHAR(20),                                   -- 公司ID
     currency VARCHAR(10)                                      -- 货币单位
 );
+
+
+-- 创建利润表同比增长超级表
+CREATE STABLE IF NOT EXISTS income_statement_yoy_tushare (
+    ts TIMESTAMP,
+    ts_code VARCHAR(50),                                      -- TS股票代码
+    ann_date VARCHAR(50),                                     -- 公告日期
+    end_date VARCHAR(50),                                     -- 报告期
+    report_type VARCHAR(50),                                  -- 报表类型
+    
+    -- 每股收益同比
+    basic_eps_abs_yoy DOUBLE,                                 -- 基本每股收益同比绝对值
+    basic_eps_pct_yoy DOUBLE,                                 -- 基本每股收益同比百分比
+    diluted_eps_abs_yoy DOUBLE,                               -- 稀释每股收益同比绝对值
+    diluted_eps_pct_yoy DOUBLE,                               -- 稀释每股收益同比百分比
+
+    -- 收入相关同比
+    total_revenue_abs_yoy DOUBLE,                             -- 营业总收入同比绝对值
+    total_revenue_pct_yoy DOUBLE,                             -- 营业总收入同比百分比
+    revenue_abs_yoy DOUBLE,                                   -- 营业收入同比绝对值
+    revenue_pct_yoy DOUBLE,                                   -- 营业收入同比百分比
+    int_income_abs_yoy DOUBLE,                                -- 利息收入同比绝对值
+    int_income_pct_yoy DOUBLE,                                -- 利息收入同比百分比
+    prem_earned_abs_yoy DOUBLE,                               -- 已赚保费同比绝对值
+    prem_earned_pct_yoy DOUBLE,                               -- 已赚保费同比百分比
+    comm_income_abs_yoy DOUBLE,                               -- 手续费及佣金收入同比绝对值
+    comm_income_pct_yoy DOUBLE,                               -- 手续费及佣金收入同比百分比
+    n_commis_income_abs_yoy DOUBLE,                           -- 手续费及佣金净收入同比绝对值
+    n_commis_income_pct_yoy DOUBLE,                           -- 手续费及佣金净收入同比百分比
+    n_oth_income_abs_yoy DOUBLE,                              -- 其他经营净收益同比绝对值
+    n_oth_income_pct_yoy DOUBLE,                              -- 其他经营净收益同比百分比
+    n_oth_b_income_abs_yoy DOUBLE,                            -- 其他业务净收益同比绝对值
+    n_oth_b_income_pct_yoy DOUBLE,                            -- 其他业务净收益同比百分比
+
+    -- 收益变动同比
+    fv_value_chg_gain_abs_yoy DOUBLE,                         -- 公允价值变动净收益同比绝对值
+    fv_value_chg_gain_pct_yoy DOUBLE,                         -- 公允价值变动净收益同比百分比
+    invest_income_abs_yoy DOUBLE,                             -- 投资净收益同比绝对值
+    invest_income_pct_yoy DOUBLE,                             -- 投资净收益同比百分比
+    ass_invest_income_abs_yoy DOUBLE,                         -- 对联营企业和合营企业的投资收益同比绝对值
+    ass_invest_income_pct_yoy DOUBLE,                         -- 对联营企业和合营企业的投资收益同比百分比
+    forex_gain_abs_yoy DOUBLE,                                -- 汇兑净收益同比绝对值
+    forex_gain_pct_yoy DOUBLE,                                -- 汇兑净收益同比百分比
+
+    -- 成本费用同比
+    total_cogs_abs_yoy DOUBLE,                                -- 营业总成本同比绝对值
+    total_cogs_pct_yoy DOUBLE,                                -- 营业总成本同比百分比
+    oper_cost_abs_yoy DOUBLE,                                 -- 营业成本同比绝对值
+    oper_cost_pct_yoy DOUBLE,                                 -- 营业成本同比百分比
+    int_exp_abs_yoy DOUBLE,                                   -- 利息支出同比绝对值
+    int_exp_pct_yoy DOUBLE,                                   -- 利息支出同比百分比
+    comm_exp_abs_yoy DOUBLE,                                  -- 手续费及佣金支出同比绝对值
+    comm_exp_pct_yoy DOUBLE,                                  -- 手续费及佣金支出同比百分比
+    biz_tax_surchg_abs_yoy DOUBLE,                            -- 营业税金及附加同比绝对值
+    biz_tax_surchg_pct_yoy DOUBLE,                            -- 营业税金及附加同比百分比
+    sell_exp_abs_yoy DOUBLE,                                  -- 销售费用同比绝对值
+    sell_exp_pct_yoy DOUBLE,                                  -- 销售费用同比百分比
+    admin_exp_abs_yoy DOUBLE,                                 -- 管理费用同比绝对值
+    admin_exp_pct_yoy DOUBLE,                                 -- 管理费用同比百分比
+    fin_exp_abs_yoy DOUBLE,                                   -- 财务费用同比绝对值
+    fin_exp_pct_yoy DOUBLE,                                   -- 财务费用同比百分比
+    assets_impair_loss_abs_yoy DOUBLE,                        -- 资产减值损失同比绝对值
+    assets_impair_loss_pct_yoy DOUBLE,                        -- 资产减值损失同比百分比
+
+    -- 利润计算同比
+    operate_profit_abs_yoy DOUBLE,                            -- 营业利润同比绝对值
+    operate_profit_pct_yoy DOUBLE,                            -- 营业利润同比百分比
+    total_profit_abs_yoy DOUBLE,                              -- 利润总额同比绝对值
+    total_profit_pct_yoy DOUBLE,                              -- 利润总额同比百分比
+    n_income_abs_yoy DOUBLE,                                  -- 净利润(含少数股东损益)同比绝对值
+    n_income_pct_yoy DOUBLE,                                  -- 净利润(含少数股东损益)同比百分比
+    n_income_attr_p_abs_yoy DOUBLE,                           -- 净利润(不含少数股东损益)同比绝对值
+    n_income_attr_p_pct_yoy DOUBLE,                           -- 净利润(不含少数股东损益)同比百分比
+
+    -- 关键指标当前值（便于分析）
+    current_total_revenue DOUBLE,                             -- 当前期营业总收入
+    current_revenue DOUBLE,                                   -- 当前期营业收入
+    current_n_income DOUBLE,                                  -- 当前期净利润
+    current_n_income_attr_p DOUBLE,                           -- 当前期归属母公司净利润
+
+    created_time TIMESTAMP,                                   -- 数据创建时间
+    updated_time TIMESTAMP                                    -- 数据更新时间
+) TAGS (
+    location VARCHAR(64),                                     -- 地区标签
+    company_id VARCHAR(20),                                   -- 公司ID
+    currency VARCHAR(10)                                      -- 货币单位
+);
