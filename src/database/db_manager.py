@@ -85,7 +85,7 @@ class DBManager:
     def get_stock_id_list_all(self)  -> List[StockBasicInfo] :
             session=self.Session()
             try:
-                stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).all()
+                stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location,StockBasicInfo.launch_date).where(StockBasicInfo.is_retired==0).all()
                 return stock_daily_list
             except Exception as e:
                 logger.error(f"获取stock列表失败: {e}")
@@ -96,7 +96,7 @@ class DBManager:
     def get_stock_id_list(self,is_new:0)  -> List[StockBasicInfo] :
         session=self.Session()
         try:
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0,StockBasicInfo.is_new == is_new).all()
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).all()
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取stock列表失败: {e}")

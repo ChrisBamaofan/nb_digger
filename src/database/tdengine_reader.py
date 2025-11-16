@@ -91,11 +91,11 @@ class TDEngineReader:
                 'prefix': 'is_tsh',
                 'fields': finance_report_constant.is_fields_all  # 利润表字段
             },
-            'balance_sheets_tushare': {
+            'balance_sheet_tushare': {
                 'prefix': 'bs_tsh', 
                 'fields': finance_report_constant.bs_numeric_fields  # 资产负债表字段
             },
-            'cash_flow_statements_tushare': {
+            'cash_flow_statement_tushare': {
                 'prefix': 'cfs_tsh',
                 'fields': finance_report_constant.cfs_numeric_fields  # 现金流量表字段
             },
@@ -103,11 +103,11 @@ class TDEngineReader:
                 'prefix': 'is_yoy_tsh',
                 'fields': finance_report_constant.is_numeric_fields  # 利润表同比字段
             },
-            'balance_sheets_yoy_tushare': {
+            'balance_sheet_yoy_tushare': {
                 'prefix': 'bs_yoy_tsh',
                 'fields': finance_report_constant.bs_numeric_fields  # 资产负债表同比字段
             },
-            'cash_flow_statements_yoy_tushare': {
+            'cash_flow_statement_yoy_tushare': {
                 'prefix': 'cfs_yoy_tsh',
                 'fields': finance_report_constant.cfs_numeric_fields  # 现金流量表同比字段
             }

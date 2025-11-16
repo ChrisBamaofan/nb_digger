@@ -250,8 +250,8 @@ class TushareService:
                 # 2.准备
                 tushare = TushareService()
                 db_manager = DBManager()
-                start_date = date(2025, 11, 7).strftime('%Y%m%d')
-                end_date = date(2025, 11, 7).strftime('%Y%m%d')
+                start_date = date(2025, 11, 14).strftime('%Y%m%d')
+                end_date = date(2025, 11, 14).strftime('%Y%m%d')
                 stock_list = db_manager.get_stock_id_list(is_new=0)
                 print(stock_list)
                 

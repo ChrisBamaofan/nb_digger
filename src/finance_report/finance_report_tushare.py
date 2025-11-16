@@ -61,6 +61,9 @@ class FinanceReportTushare:
             location: 地区标签
         """
         try:
+            print(current_report)
+            print("======================")
+            print(previous_report)
             # 计算同比变化
             yoy_data = self.calculate_income_yoy_tushare(current_report, previous_report)
             
@@ -77,7 +80,159 @@ class FinanceReportTushare:
             
         except Exception as e:
             log.error(f"{stock_id} - 插入同比数据时出错: {e}")
+
+    def insert_balance_sheet_yoy_tushare(self,stock_id: str, current_report: Dict, previous_report: Dict, location: str):
+        """
+        插入资产负债表同比变化数据到TDengine
+        
+        Args:
+            stock_id: 股票代码
+            current_report: 当期报告
+            previous_report: 上期报告
+            location: 地区标签
+        """
+        try:
+            # 计算同比变化
+            constant = FinanceReportConstant()
             
+            yoy_data = self.calculate_balance_sheet_yoy(current_report, previous_report,constant.bs_numeric_fields)
+            
+            if not yoy_data:
+                log.warning(f"{stock_id} - 无法计算资产负债表同比数据")
+                return
+            
+            # 构建插入SQL
+            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report)
+            
+            # 执行插入
+            tdengine.execute(sql)  # 根据您的实际执行方法调整
+            log.info(f"{stock_id} - 成功插入资产负债表同比数据: {current_report.get('end_date')}")
+            
+            return sql
+            
+        except Exception as e:
+            log.error(f"{stock_id} - 插入资产负债表同比数据时出错: {e}")
+            return None
+
+    def insert_cash_flow_statement_yoy_tushare(self,stock_id: str, current_report: Dict, previous_report: Dict, location: str):
+        """
+        插入现金流表同比变化数据到TDengine
+        
+        Args:
+            stock_id: 股票代码
+            current_report: 当期报告
+            previous_report: 上期报告
+            location: 地区标签
+        """
+        try:
+            # 计算同比变化
+            
+            yoy_data = self.calculate_balance_sheet_yoy(current_report, previous_report,FinanceReportConstant.cfs_numeric_fields)
+            
+            if not yoy_data:
+                log.warning(f"{stock_id} - 无法计算现金流表同比数据")
+                return
+            
+            # 构建插入SQL
+            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report)
+            
+            # 执行插入
+            tdengine.execute(sql)  # 根据您的实际执行方法调整
+            log.info(f"{stock_id} - 成功插入现金流表同比数据: {current_report.get('end_date')}")
+            
+            return sql
+            
+        except Exception as e:
+            log.error(f"{stock_id} - 插入现金流表同比数据时出错: {e}")
+            return None
+        
+    def calculate_balance_sheet_yoy(self,current_report: Dict, previous_report: Dict,numeric_field:List) -> Dict:
+        """
+        计算资产负债表各项指标的同比变化
+        
+        Args:
+            current_report: 当期报告
+            previous_report: 上期报告
+            
+        Returns:
+            Dict: 包含同比变化数据的字典
+        """
+        yoy_data = {
+            'ts_code': current_report.get('ts_code'),
+            'end_date': current_report.get('end_date'),
+            'report_type': current_report.get('report_type')
+        }
+        
+        
+        for field in numeric_field:
+            current_value = current_report.get(field)
+            previous_value = previous_report.get(field)
+            
+            # 计算绝对值变化
+            abs_change = self.calculate_change(current_value, previous_value, 'abs')
+            # 计算百分比变化
+            pct_change = self.calculate_change(current_value, previous_value, 'pct')
+            
+            yoy_data[f'{field}_abs_yoy'] = abs_change
+            yoy_data[f'{field}_pct_yoy'] = pct_change
+            
+            # 同时保存当期值用于参考
+            yoy_data[f'{field}_current'] = current_value
+        
+        return yoy_data
+
+    def build_balance_sheet_yoy_insert_sql(self,stock_id: str, yoy_data: Dict, current_report: Dict) -> str:
+        """
+        构建资产负债表同比数据插入SQL
+        
+        Args:
+            stock_id: 股票代码
+            yoy_data: 同比数据
+            current_report: 当期报告（用于获取原始数据）
+            
+        Returns:
+            str: 插入SQL语句
+        """
+        # 使用报告期末日期作为时间戳
+        end_date = yoy_data['end_date']
+        end_date = datetime.strptime(end_date, '%Y%m%d').strftime('%Y-%m-%d')
+        utc_ts = tdengine._convert_to_utc2(end_date)
+        
+        constant = FinanceReportConstant()
+        
+        # 构建字段值列表
+        values = [f"'{utc_ts}'"]
+        
+        # 添加基础信息字段
+        values.extend([
+            f"'{yoy_data['ts_code'] or ''}'",
+            f"'{yoy_data['end_date'] or ''}'",
+            f"'{yoy_data['report_type'] or ''}'"
+        ])
+        
+        # 添加所有数值字段的同比变化
+        for field in constant.bs_numeric_fields:
+            abs_yoy = yoy_data.get(f'{field}_abs_yoy')
+            pct_yoy = yoy_data.get(f'{field}_pct_yoy')
+            current_value = yoy_data.get(f'{field}_current')
+            
+            values.extend([
+                self._format_sql_value(abs_yoy),      # 绝对值变化
+                self._format_sql_value(pct_yoy),      # 百分比变化
+                self._format_sql_value(current_value) # 当期值
+            ])
+        
+        # 添加系统字段
+        values.extend([
+            "NOW()",  # created_time
+            "NOW()"   # updated_time
+        ])
+        
+        # 构建完整的SQL语句
+        sql = f"INSERT INTO bs_yoy_tsh_{stock_id} VALUES ({', '.join(values)})"
+        
+        return sql
+
     def calculate_income_yoy_tushare(self,current_report: Dict, previous_report: Dict) -> Dict:
         """
         计算利润表各项指标的同比变化
