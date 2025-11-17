@@ -81,7 +81,7 @@ if __name__ == "__main__":
     # dig_data.dig_new_stock_info()
     
     # tushare finance data insert TDengine
-    dig_tsh.dig_income_statment_tushare()
+    # dig_tsh.dig_income_statment_tushare()
     dig_tsh.dig_income_statment_yoy_tushare()
     dig_tsh.dig_balance_sheet_tushare()
     dig_tsh.dig_balance_sheet_yoy_tushare()

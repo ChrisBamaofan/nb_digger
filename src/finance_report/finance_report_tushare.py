@@ -102,7 +102,8 @@ class FinanceReportTushare:
                 return
             
             # 构建插入SQL
-            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report)
+            
+            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report,constant.bs_numeric_fields,'bs')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -134,7 +135,8 @@ class FinanceReportTushare:
                 return
             
             # 构建插入SQL
-            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report)
+            constant = FinanceReportConstant()
+            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report,constant.cfs_numeric_fields,'cfs')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -181,7 +183,7 @@ class FinanceReportTushare:
         
         return yoy_data
 
-    def build_balance_sheet_yoy_insert_sql(self,stock_id: str, yoy_data: Dict, current_report: Dict) -> str:
+    def build_balance_sheet_yoy_insert_sql(self,stock_id: str, yoy_data: Dict, current_report: Dict,numeric_fields:List,yoy_table_type:str) -> str:
         """
         构建资产负债表同比数据插入SQL
         
@@ -198,8 +200,6 @@ class FinanceReportTushare:
         end_date = datetime.strptime(end_date, '%Y%m%d').strftime('%Y-%m-%d')
         utc_ts = tdengine._convert_to_utc2(end_date)
         
-        constant = FinanceReportConstant()
-        
         # 构建字段值列表
         values = [f"'{utc_ts}'"]
         
@@ -211,7 +211,7 @@ class FinanceReportTushare:
         ])
         
         # 添加所有数值字段的同比变化
-        for field in constant.bs_numeric_fields:
+        for field in numeric_fields:
             abs_yoy = yoy_data.get(f'{field}_abs_yoy')
             pct_yoy = yoy_data.get(f'{field}_pct_yoy')
             current_value = yoy_data.get(f'{field}_current')
@@ -229,7 +229,7 @@ class FinanceReportTushare:
         ])
         
         # 构建完整的SQL语句
-        sql = f"INSERT INTO bs_yoy_tsh_{stock_id} VALUES ({', '.join(values)})"
+        sql = f"INSERT INTO {yoy_table_type}_yoy_tsh_{stock_id} VALUES ({', '.join(values)})"
         
         return sql
 
@@ -244,6 +244,7 @@ class FinanceReportTushare:
         """
         yoy_data = {
             'ts_code': current_report.get('ts_code'),
+            'ann_date': current_report.get('ann_date'),
             'end_date': current_report.get('end_date'),
             'report_type': current_report.get('report_type')
         }
@@ -320,6 +321,7 @@ class FinanceReportTushare:
             INSERT INTO is_yoy_tsh_{stock_id} VALUES (
                 '{utc_ts}',
                 '{yoy_data['ts_code'] or ''}',
+                '{yoy_data['ann_date'] or ''}',
                 '{yoy_data['end_date'] or ''}',
                 '{yoy_data['report_type'] or ''}',
                 {self._format_sql_value(yoy_data.get('basic_eps_abs_yoy'))},

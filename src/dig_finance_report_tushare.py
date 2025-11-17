@@ -186,12 +186,12 @@ def dig_cash_flow_statement_yoy_tushare():
     for stock in stock_list:
         current_stock_id = stock.stock_id
         location = stock.location
-        logging.info(f'{current_stock_id} - 开始计算现金流表同比')
+        logging.info(f'{current_stock_id} - 开始计算现金流同比表同比')
         try:
             is_reports = tdreader.get_finance_report_all(stock_id=current_stock_id, report_type="cash_flow_statement_tushare")
             
             if not is_reports or len(is_reports) < 2:
-                logging.warning(f'{current_stock_id} - 现金流表数据不足，跳过')
+                logging.warning(f'{current_stock_id} - 现金流同比表数据不足，跳过')
                 continue
             
             # 按报告期排序
