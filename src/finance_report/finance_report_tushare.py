@@ -65,14 +65,15 @@ class FinanceReportTushare:
             print("======================")
             print(previous_report)
             # 计算同比变化
-            yoy_data = self.calculate_income_yoy_tushare(current_report, previous_report)
+            constant = FinanceReportConstant()
+            yoy_data = self.calculate_yoy(current_report, previous_report,constant.is_numeric_fields)
             
             if not yoy_data:
                 log.warning(f"{stock_id} - 无法计算同比数据")
                 return
             
             # 构建插入SQL
-            sql = self.build_income_yoy_insert_sql(stock_id, yoy_data, current_report)
+            sql = self.build_yoy_insert_sql(stock_id, yoy_data, current_report,'is')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -95,15 +96,13 @@ class FinanceReportTushare:
             # 计算同比变化
             constant = FinanceReportConstant()
             
-            yoy_data = self.calculate_balance_sheet_yoy(current_report, previous_report,constant.bs_numeric_fields)
+            yoy_data = self.calculate_yoy(current_report, previous_report,constant.bs_numeric_fields)
             
             if not yoy_data:
                 log.warning(f"{stock_id} - 无法计算资产负债表同比数据")
                 return
             
-            # 构建插入SQL
-            
-            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report,constant.bs_numeric_fields,'bs')
+            sql = self.build_yoy_insert_sql(stock_id, yoy_data, current_report,constant.bs_numeric_fields,'bs')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -127,16 +126,15 @@ class FinanceReportTushare:
         """
         try:
             # 计算同比变化
-            
-            yoy_data = self.calculate_balance_sheet_yoy(current_report, previous_report,FinanceReportConstant.cfs_numeric_fields)
+            constant = FinanceReportConstant()
+            yoy_data = self.calculate_yoy(current_report, previous_report,constant.cfs_numeric_fields)
             
             if not yoy_data:
                 log.warning(f"{stock_id} - 无法计算现金流表同比数据")
                 return
             
             # 构建插入SQL
-            constant = FinanceReportConstant()
-            sql = self.build_balance_sheet_yoy_insert_sql(stock_id, yoy_data, current_report,constant.cfs_numeric_fields,'cfs')
+            sql = self.build_yoy_insert_sql(stock_id, yoy_data, current_report,constant.cfs_numeric_fields,'cfs')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -148,19 +146,19 @@ class FinanceReportTushare:
             log.error(f"{stock_id} - 插入现金流表同比数据时出错: {e}")
             return None
         
-    def calculate_balance_sheet_yoy(self,current_report: Dict, previous_report: Dict,numeric_field:List) -> Dict:
+    def calculate_yoy(self,current_report: Dict, previous_report: Dict,numeric_field:List) -> Dict:
         """
         计算资产负债表各项指标的同比变化
         
         Args:
             current_report: 当期报告
             previous_report: 上期报告
-            
         Returns:
             Dict: 包含同比变化数据的字典
         """
         yoy_data = {
             'ts_code': current_report.get('ts_code'),
+            'ann_date': current_report.get('ann_date'),
             'end_date': current_report.get('end_date'),
             'report_type': current_report.get('report_type')
         }
@@ -178,12 +176,10 @@ class FinanceReportTushare:
             yoy_data[f'{field}_abs_yoy'] = abs_change
             yoy_data[f'{field}_pct_yoy'] = pct_change
             
-            # 同时保存当期值用于参考
-            yoy_data[f'{field}_current'] = current_value
         
         return yoy_data
 
-    def build_balance_sheet_yoy_insert_sql(self,stock_id: str, yoy_data: Dict, current_report: Dict,numeric_fields:List,yoy_table_type:str) -> str:
+    def build_yoy_insert_sql(self,stock_id: str, yoy_data: Dict, current_report: Dict,numeric_fields:List,yoy_table_type:str) -> str:
         """
         构建资产负债表同比数据插入SQL
         
@@ -202,30 +198,28 @@ class FinanceReportTushare:
         
         # 构建字段值列表
         values = [f"'{utc_ts}'"]
-        
         # 添加基础信息字段
         values.extend([
             f"'{yoy_data['ts_code'] or ''}'",
+            f"'{yoy_data['ann_date'] or ''}'",
             f"'{yoy_data['end_date'] or ''}'",
             f"'{yoy_data['report_type'] or ''}'"
         ])
         
-        # 添加所有数值字段的同比变化
+        
         for field in numeric_fields:
             abs_yoy = yoy_data.get(f'{field}_abs_yoy')
             pct_yoy = yoy_data.get(f'{field}_pct_yoy')
-            current_value = yoy_data.get(f'{field}_current')
             
             values.extend([
-                self._format_sql_value(abs_yoy),      # 绝对值变化
-                self._format_sql_value(pct_yoy),      # 百分比变化
-                self._format_sql_value(current_value) # 当期值
+                self._format_sql_value(abs_yoy),
+                self._format_sql_value(pct_yoy),
             ])
         
-        # 添加系统字段
+        
         values.extend([
-            "NOW()",  # created_time
-            "NOW()"   # updated_time
+            "NOW()",
+            "NOW()"
         ])
         
         # 构建完整的SQL语句
@@ -290,7 +284,8 @@ class FinanceReportTushare:
             if change_type == 'abs':
                 return current - previous
             elif change_type == 'pct':
-                return (current - previous) / abs(previous) * 100
+                res =  (current - previous) / abs(previous)
+                return round(res,4)
             else:
                 return None
                 

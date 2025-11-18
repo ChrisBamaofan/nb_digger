@@ -112,7 +112,7 @@ class FinanceReportConstant:
         'uncon_invest_loss','prov_depr_assets','depr_fa_coga_dpba','amort_intang_assets','lt_amort_deferred_exp',
         'decr_deferred_exp','incr_acc_exp','loss_disp_fiolta','loss_scr_fa','loss_fv_chg','invest_loss',
         'decr_def_inc_tax_assets','incr_def_inc_tax_liab','decr_inventories','decr_oper_payable','incr_oper_payable',
-        '`others`','im_net_cashflow_oper_act','conv_debt_into_cap','conv_copbonds_due_within_1y','fa_fnc_leases',
+        'others','im_net_cashflow_oper_act','conv_debt_into_cap','conv_copbonds_due_within_1y','fa_fnc_leases',
         'im_n_incr_cash_equ','net_dism_capital_add','net_cash_rece_sec','credit_impa_loss','use_right_asset_dep',
         'oth_loss_asset','end_bal_cash','beg_bal_cash','end_bal_cash_equ','beg_bal_cash_equ']
         self.cfs_fields_all = ['ts','ts_code','ann_date','f_ann_date','end_date','comp_type',
@@ -131,7 +131,7 @@ class FinanceReportConstant:
         'uncon_invest_loss','prov_depr_assets','depr_fa_coga_dpba','amort_intang_assets','lt_amort_deferred_exp',
         'decr_deferred_exp','incr_acc_exp','loss_disp_fiolta','loss_scr_fa','loss_fv_chg','invest_loss',
         'decr_def_inc_tax_assets','incr_def_inc_tax_liab','decr_inventories','decr_oper_payable','incr_oper_payable',
-        '`others`','im_net_cashflow_oper_act','conv_debt_into_cap','conv_copbonds_due_within_1y','fa_fnc_leases',
+        'others','im_net_cashflow_oper_act','conv_debt_into_cap','conv_copbonds_due_within_1y','fa_fnc_leases',
         'im_n_incr_cash_equ','net_dism_capital_add','net_cash_rece_sec','credit_impa_loss','use_right_asset_dep',
         'oth_loss_asset','end_bal_cash','beg_bal_cash','end_bal_cash_equ','beg_bal_cash_equ',
         'update_flag','created_time','updated_time']

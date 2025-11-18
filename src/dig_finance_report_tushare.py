@@ -10,6 +10,7 @@ import time
 from database.tdengine_reader import TDEngineReader as tdReader
 import logging
 from finance_report.finance_report_tushare import FinanceReportTushare
+from finance_report.finance_report_constant import FinanceReportConstant
 
 
 def dig_income_statment_tushare():
@@ -18,6 +19,7 @@ def dig_income_statment_tushare():
     db_manager = DBManager()
     
     stock_list = db_manager.get_stock_id_list_all()
+    fin = FinanceReportConstant()
     for stock in stock_list:
         time.sleep(0.301)
         stock_id = stock.stock_id
@@ -34,7 +36,7 @@ def dig_income_statment_tushare():
         TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"is_tsh_{stock_id}","income_statement_tushare",True,"RMB")
 
         tushare_data = tushare.get_income_statement(stock_id=newStockId,start_time=start_date,end_time=end_date)
-        TDEngineTushareWriter.insert_income_statement_tushare(tushare_data=tushare_data,stock_id=stock_id)
+        TDEngineTushareWriter.insert_tushare(tushare_data=tushare_data,stock_id=stock_id,numeric_fields=fin.is_numeric_fields,type='is')
         
 def dig_income_statment_yoy_tushare():
     setup_logger()
@@ -87,6 +89,7 @@ def dig_balance_sheet_tushare():
     db_manager = DBManager()
     
     stock_list = db_manager.get_stock_id_list_all()
+    fin = FinanceReportConstant()
     for stock in stock_list:
         time.sleep(0.301)
         stock_id = stock.stock_id
@@ -103,7 +106,8 @@ def dig_balance_sheet_tushare():
         TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"bs_tsh_{stock_id}","balance_sheet_tushare",True,"RMB")
 
         tushare_data = tushare.get_balanceSheet(stock_id=newStockId,start_time=start_date,end_time=end_date)
-        TDEngineTushareWriter.insert_balance_sheet_tushare(tushare_data=tushare_data,stock_id=stock_id)
+        print(tushare_data)
+        TDEngineTushareWriter.insert_tushare(tushare_data=tushare_data,stock_id=stock_id, numeric_fields=fin.bs_numeric_fields,type='bs' )
         
 def dig_balance_sheet_yoy_tushare():
     setup_logger()
@@ -157,6 +161,7 @@ def dig_cash_flow_statement_tushare():
     db_manager = DBManager()
     
     stock_list = db_manager.get_stock_id_list_all()
+    fin = FinanceReportConstant()
     for stock in stock_list:
         time.sleep(0.301)
         stock_id = stock.stock_id
@@ -172,8 +177,8 @@ def dig_cash_flow_statement_tushare():
         # 确保表存在 
         TDEngineWriter.create_dynamic_table("nb_stock",stock_id,location,'',f"cfs_tsh_{stock_id}","cash_flow_statement_tushare",True,"RMB")
 
-        tushare_data = tushare.get_cashflowstatement(stock_id=newStockId,start_time=start_date,end_time=end_date)
-        TDEngineTushareWriter.insert_cash_flow_statement_tushare(tushare_data=tushare_data,stock_id=stock_id)
+        tushare_data = tushare.get_cashflowstatement(stock_id=newStockId,start_time=start_date,end_time=end_date,)
+        TDEngineTushareWriter.insert_tushare(tushare_data=tushare_data,stock_id=stock_id,numeric_fields=fin.cfs_numeric_fields,type='cfs')
         
 def dig_cash_flow_statement_yoy_tushare():
     setup_logger()

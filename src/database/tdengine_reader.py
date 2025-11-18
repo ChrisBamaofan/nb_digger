@@ -93,11 +93,11 @@ class TDEngineReader:
             },
             'balance_sheet_tushare': {
                 'prefix': 'bs_tsh', 
-                'fields': finance_report_constant.bs_numeric_fields  # 资产负债表字段
+                'fields': finance_report_constant.bs_fields_all  # 资产负债表字段
             },
             'cash_flow_statement_tushare': {
                 'prefix': 'cfs_tsh',
-                'fields': finance_report_constant.cfs_numeric_fields  # 现金流量表字段
+                'fields': finance_report_constant.cfs_fields_all  # 现金流量表字段
             },
             'income_statement_yoy_tushare': {
                 'prefix': 'is_yoy_tsh',
