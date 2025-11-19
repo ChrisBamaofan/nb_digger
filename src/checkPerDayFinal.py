@@ -193,5 +193,5 @@ def fixDataAfterFQ():
             log.info(f"股票 {stock_id} 数据一致，无需调整")
 
 
-fixDataAfterFQ()
+#fixDataAfterFQ()
 #checkData()

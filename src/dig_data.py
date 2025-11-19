@@ -430,9 +430,9 @@ def dig_new_stock_info():
                 #     )
 
                 # 财报数据 获取并写入 tdengine
-                dig_income_statment(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
-                dig_balance_sheet(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
-                dig_cash_flow_statement(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
+                # dig_income_statment(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
+                # dig_balance_sheet(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
+                # dig_cash_flow_statement(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
                 # todo 更新 is_new = 0
                 # basic_info = {
                 #     'stock_id': stock_id,

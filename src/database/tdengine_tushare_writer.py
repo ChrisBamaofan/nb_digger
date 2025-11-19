@@ -10,7 +10,7 @@ class TDEngineTushareWriter:
     def insert_tushare(tushare_data, stock_id: str,numeric_fields:list,type:str):
         
         for _, row in tushare_data.iterrows():
-            print(row)
+            # print(row)
             # 处理NaN值为NULL
             row = row.where(pd.notna(row), None)
             
