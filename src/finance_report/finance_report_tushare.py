@@ -73,7 +73,7 @@ class FinanceReportTushare:
                 return
             
             # 构建插入SQL
-            sql = self.build_yoy_insert_sql(stock_id, yoy_data, current_report,'is')
+            sql = self.build_yoy_insert_sql(stock_id, yoy_data, constant.is_numeric_fields,'is')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -102,7 +102,7 @@ class FinanceReportTushare:
                 log.warning(f"{stock_id} - 无法计算资产负债表同比数据")
                 return
             
-            sql = self.build_yoy_insert_sql(stock_id, yoy_data, current_report,constant.bs_numeric_fields,'bs')
+            sql = self.build_yoy_insert_sql(stock_id, yoy_data, constant.bs_numeric_fields,'bs')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -134,7 +134,7 @@ class FinanceReportTushare:
                 return
             
             # 构建插入SQL
-            sql = self.build_yoy_insert_sql(stock_id, yoy_data, current_report,constant.cfs_numeric_fields,'cfs')
+            sql = self.build_yoy_insert_sql(stock_id, yoy_data, constant.cfs_numeric_fields,'cfs')
             
             # 执行插入
             tdengine.execute(sql)  # 根据您的实际执行方法调整
@@ -179,7 +179,7 @@ class FinanceReportTushare:
         
         return yoy_data
 
-    def build_yoy_insert_sql(self,stock_id: str, yoy_data: Dict, current_report: Dict,numeric_fields:List,yoy_table_type:str) -> str:
+    def build_yoy_insert_sql(self,stock_id: str, yoy_data: Dict, numeric_fields:List,yoy_table_type:str) -> str:
         """
         构建资产负债表同比数据插入SQL
         

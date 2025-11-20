@@ -11,14 +11,14 @@
     000691的财报  bs 和  cfs yoy 还要加载一次
     
 2   财报换 api
-    balance_sheet                  10/8完成 done 1102
-    balance_sheet_yoy               10/9完成 done 1102
-    cash_flow_statement             10/10完成 done 1102
-    cash_flow_statement_yoy          10/11完成 done 1102
+    balance_sheet                  10/8完成 done 1119
+    balance_sheet_yoy               10/9完成 done 1119
+    cash_flow_statement             10/10完成 done 1119
+    cash_flow_statement_yoy          10/11完成 done 1119
+    
     
     新增一张tdengine表 用来记录 扣非净利润增长率和换手率
     https://tushare.pro/document/2?doc_id=79  查询tushare的同比数据
-    
 
 3   港股 
     股票列表及周线信息              10/12
