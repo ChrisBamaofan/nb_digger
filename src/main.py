@@ -10,6 +10,7 @@ import database.tdengine_connector
 import dig_finance_report_tushare as dig_tsh
 
 import akshare as ak
+from checkPerDayFinal import fixDataAfterFQ
 
 def updateCycleValue():
     setup_logger()
@@ -70,13 +71,12 @@ def updateNewStocks():
 
 
 if __name__ == "__main__":
-    # 除权
-    # checkPerDayFinal
-    # 每周交易数据
+    
     ts = TushareService()
-    # ts.update_basic_get_stock()
-    # ts.getBJStock(stock_id='430418')
-    # dig_data.dig_balance_sheet(stock_id='001277',location='china.shenzhen',start_date='2022-01-17 00:00:00',end_date='2025-10-31 00:00:00',is_new=1)
+    
+    # 每周交易数据
+    #ts.update_basic_get_stock()
+    
     # 新股
     # dig_data.dig_new_stock_info()
     
@@ -92,3 +92,6 @@ if __name__ == "__main__":
     # 3. USA stock list, basic_info, finance_report
     # updateRetiredStocks()
     # updateNewStocks()
+    
+    # 赋权后更新股价
+    #fixDataAfterFQ()
