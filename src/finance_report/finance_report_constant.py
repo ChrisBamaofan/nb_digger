@@ -18,7 +18,7 @@ class FinanceReportConstant:
         'withdra_oth_ersu','workers_welfare','distr_profit_shrhder','prfshare_payable_dvd',
         'comshare_payable_dvd','capit_comstock_div','net_after_nr_lp_correct','credit_impa_loss',
         'net_expo_hedging_benefits','oth_impair_loss_assets','total_opcost','amodcost_fin_assets',
-        'oth_income','asset_disp_income','continued_net_profit','end_net_profit',]
+        'oth_income','asset_disp_income','continued_net_profit','end_net_profit']
         self.is_fields_all = [
             'ts', 'ts_code', 'ann_date', 'f_ann_date', 'end_date', 'report_type', 'comp_type', 'end_type',
             'basic_eps', 'diluted_eps', 'total_revenue', 'revenue', 'int_income', 'prem_earned', 

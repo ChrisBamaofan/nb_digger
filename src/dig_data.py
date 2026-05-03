@@ -11,6 +11,7 @@ from database.tdengine_reader import TDEngineReader as tdReader
 import logging
 import akshare as ak
 from finance_report.finance_report_tushare import FinanceReportTushare
+import dig_finance_report_tushare as dig_tsh
 
 logger = logging.getLogger(__name__)
 # 获取所有的数据，修改start 来调整获取的数据启始时间
@@ -376,10 +377,21 @@ def dig_new_stock_info():
         # 1.准备
         tushare = TushareService()
         db_manager = DBManager()
-        
-        end_date = date(2025, 10, 31).strftime('%Y%m%d')
+
+        # 1.1 发现新股：对比 Tushare 上市列表和数据库，差集插入 basic_info（is_new=1）
+        all_stocks = db_manager.get_stock_id_list_all()
+        all_stock_ids_tushare = [
+            TushareService.convert_stock_id(s.stock_id, s.location)
+            for s in all_stocks
+            if s.stock_id and s.location
+        ]
+        new_ts_codes = tushare.check_new_stocks(all_stock_ids_tushare)
+        logger.info(f'发现新股数量: {len(new_ts_codes)}')
+
+        # 1.2 获取刚插入的 is_new=1 的股票列表
+        end_date = date(2026, 4, 12).strftime('%Y%m%d')
         stock_list = db_manager.get_new_stock_id_list()
-        logger.info(f'stock_list={len(stock_list)}')
+        logger.info(f'待处理新股数量: {len(stock_list)}')
         logger.info(stock_list)
         # tushare: daily_day,weekly_week,monthly_month
         input_str = "weekly_week"
@@ -396,49 +408,54 @@ def dig_new_stock_info():
                 # week
                 period_local = parts[1]
                 log.info(f"正在处理股票: {stock},{period_local},{period_tu}")
-                # raw_data = tushare.get_adj_stock_data(
-                #     symbol= newStockId,
-                #     period = period_tu,
-                #     start_date=start_date,
-                #     end_date=end_date,
-                #     adjust="qfq"
-                # )
+                raw_data = tushare.get_adj_stock_data(
+                    symbol= newStockId,
+                    period = period_tu,
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq"
+                )
+                        
                 
                 # todo  循环遍历
-                # if raw_data is not None:
-                #     # 查询数据库中 该 scope_type ,stock_id，trade_date 的per_day_final是否已经存在，没有就插入 tushare_data['trade_date']
-                #     trade_dates_str = raw_data['trade_date'].iloc[0]
-                #     db_exist = db_manager.get_stock_per_day(stock_id=stock_id,period=period_local,trade_date=trade_dates_str)
-                #     if db_exist:
-                #         continue
+                if raw_data is not None:
+                    # 查询数据库中 该 scope_type ,stock_id，trade_date 的per_day_final是否已经存在，没有就插入 tushare_data['trade_date']
+                    trade_dates_str = raw_data['trade_date'].iloc[0]
+                    db_exist = db_manager.get_stock_per_day(stock_id=stock_id,period=period_local,trade_date=trade_dates_str)
+                    if db_exist:
+                        continue
                     
-                #     """同步数据到 mysql"""
-                #     db_ready_data = db_manager.convert_to_db_format_tushare(stock_id,raw_data,period_local)
+                    """同步数据到 mysql"""
+                    db_ready_data = db_manager.convert_to_db_format_tushare(stock_id,raw_data,period_local)
                     
-                #     db_manager.save_daily_data(db_ready_data)
+                    db_manager.save_daily_data(db_ready_data)
 
-                #     """同步数据到TDEngine"""
-                #     # 确保表存在
-                #     table_name_td = f"{period_local}_{stock_id}"
-                #     TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False,"RMB")
+                    """同步数据到TDEngine"""
+                    # 确保表存在
+                    table_name_td = f"{period_local}_{stock_id}"
+                    TDEngineWriter.create_dynamic_table("nb_stock",stock_id,stock.location,period_local,table_name_td,"stock_trade_history",False,"RMB")
                     
-                #     # 批量写入数据
-                #     TDEngineWriter.write_data_batch(
-                #         data=db_ready_data,
-                #         company_id=stock_id,
-                #         table_name = table_name_td
-                #     )
+                    # 批量写入数据
+                    TDEngineWriter.write_data_batch(
+                        data=db_ready_data,
+                        company_id=stock_id,
+                        table_name = table_name_td
+                    )
 
-                # 财报数据 获取并写入 tdengine
-                # dig_income_statment(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
-                # dig_balance_sheet(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
-                # dig_cash_flow_statement(stock_id=stock_id,location=location,start_date=start_date,end_date=end_date,is_new=1)
+                # 财报数据 只获取当前新股的财报
+                single_stock = [stock]
+                dig_tsh.dig_income_statment_tushare(stock_list=single_stock)
+                dig_tsh.dig_income_statment_yoy_tushare(stock_list=single_stock)
+                dig_tsh.dig_balance_sheet_tushare(stock_list=single_stock)
+                dig_tsh.dig_balance_sheet_yoy_tushare(stock_list=single_stock)
+                dig_tsh.dig_cash_flow_statement_tushare(stock_list=single_stock)
+                dig_tsh.dig_cash_flow_statement_yoy_tushare(stock_list=single_stock)
                 # todo 更新 is_new = 0
-                # basic_info = {
-                #     'stock_id': stock_id,
-                #     'is_new': 0
-                # }
-                # db_manager.update_basic_info(basic_info)
+                basic_info = {
+                    'stock_id': stock_id,
+                    'is_new': 0
+                }
+                db_manager.update_basic_info(basic_info)
         
     except Exception as e:
         logger.error(f"检查新增股票失败: {e}")

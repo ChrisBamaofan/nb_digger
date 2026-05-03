@@ -61,9 +61,9 @@ class FinanceReportTushare:
             location: 地区标签
         """
         try:
-            print(current_report)
-            print("======================")
-            print(previous_report)
+            # print(current_report)
+            # print("======================")
+            # print(previous_report)
             # 计算同比变化
             constant = FinanceReportConstant()
             yoy_data = self.calculate_yoy(current_report, previous_report,constant.is_numeric_fields)

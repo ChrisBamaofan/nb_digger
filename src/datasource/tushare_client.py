@@ -17,12 +17,27 @@ from finance_report.finance_report_constant import FinanceReportConstant
 logger = logging.getLogger(__name__)
 
 class TushareService:
+    _latest_trade_date_cache = None
+
     def __init__(self):
         config = cfg.get_tushare()
         print("Loaded DB config:", config)
         self.token = config['api_key']
         ts.set_token(self.token)
         self.pro = ts.pro_api()
+
+    def _get_latest_trade_date(self) -> str:
+        """获取当前日期的最近一个交易日（YYYYMMDD），结果缓存避免重复查询"""
+        if TushareService._latest_trade_date_cache:
+            return TushareService._latest_trade_date_cache
+        today = date.today().strftime('%Y%m%d')
+        cal = self.pro.trade_cal(exchange='SSE', start_date='20260101', end_date=today, is_open='1')
+        if cal is not None and not cal.empty:
+            latest = cal.sort_values('cal_date', ascending=False).iloc[0]['cal_date']
+            TushareService._latest_trade_date_cache = latest
+            print(f"最近交易日: {latest}")
+            return latest
+        return today
     
     def get_stock_data(
         self, 
@@ -113,32 +128,106 @@ class TushareService:
         period: Literal['daily', 'weekly', 'monthly'] = 'daily',
         start_date: str = None, 
         end_date: str = None,
-        adjust: Literal['qfq', 'hfq'] = 'qfq'
+        adjust: str = 'qfq'
     ) -> Optional[pd.DataFrame]:
-        
+        """
+        通过 ts.pro_bar 通用行情接口获取股票行情数据
+        :param adjust: 'qfq'=前复权(默认), 'hfq'=后复权, None=不复权
+                       注意：复权目前仅日线生效，周/月线会自动回退为不复权
+        """
+        freq_map = {
+            'daily': 'D',
+            'weekly': 'W',
+            'monthly': 'M'
+        }
         try:
-            freq_map = {
-                'daily': 'D',
-                'weekly': 'W', 
-                'monthly': 'M'
-            }
+            freq = freq_map[period]
+            adj = adjust if freq == 'D' else None
+            print(f"pro_bar: {symbol} freq={freq} adj={adj} {start_date}~{end_date}")
 
-            df = ts.pro_bar( ts_code = symbol, freq=freq_map[period], adj=adjust, start_date=start_date, end_date=end_date,factors= 'tor')
+            df = ts.pro_bar(
+                ts_code=symbol,
+                freq=freq,
+                start_date=start_date,
+                end_date=end_date,
+                adj=adj,
+                factors=['tor'],
+            )
 
             if df is None or df.empty:
-                logger.warning(f"未获取到{symbol}的复权数据")
+                logger.warning(f"未获取到{symbol}的行情数据")
                 return None
-            
-            # 添加必要字段
-            df["stock_id"] = symbol
-            # df["trade_date"] = df.index.strftime('%Y%m%d')
-            
-            return df.reset_index(drop=True)
-            
+
+            if 'tor' in df.columns:
+                df = df.rename(columns={'tor': 'turnover_rate'})
+
+            keep_cols = [
+                'trade_date', 'open', 'high', 'low', 'close',
+                'vol', 'amount', 'change', 'pct_chg', 'turnover_rate',
+            ]
+            df = df[[c for c in keep_cols if c in df.columns]]
+            df['stock_id'] = symbol
+
+            return df.sort_values('trade_date').reset_index(drop=True)
+
         except Exception as e:
-            logger.error(f"Tushare获取{symbol}复权数据失败: {e}")
+            logger.error(f"Tushare pro_bar 获取{symbol}行情失败: {e}")
             return None
     
+    def get_minute_data(
+        self,
+        symbol: str,
+        freq: str = '60min',
+        start_date: str = None,
+        end_date: str = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        通过 stk_mins 获取分钟级别行情数据
+        :param symbol: 股票代码 (格式: 600000.SH)
+        :param freq: 频率 1min/5min/15min/30min/60min
+        :param start_date: 开始日期 (YYYY-MM-DD HH:MM:SS 或 YYYYMMDD)
+        :param end_date:   结束日期
+        :return: DataFrame，列名与 get_adj_stock_data 对齐
+        """
+        try:
+            if start_date and len(start_date) == 8:
+                start_date = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]} 09:00:00"
+            if end_date and len(end_date) == 8:
+                end_date = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]} 16:00:00"
+
+            logger.info(f"stk_mins: {symbol} freq={freq} {start_date}~{end_date}")
+
+            df = self.pro.stk_mins(
+                ts_code=symbol,
+                freq=freq,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+            if df is None or df.empty:
+                logger.warning(f"未获取到{symbol}的分钟数据")
+                return None
+
+            df = df.rename(columns={
+                'trade_time': 'trade_date',
+                'vol': 'vol',
+            })
+            df['change'] = 0.0
+            df['pct_chg'] = 0.0
+            df['turnover_rate'] = 0.0
+            df['stock_id'] = symbol
+
+            keep_cols = [
+                'trade_date', 'open', 'high', 'low', 'close',
+                'vol', 'amount', 'change', 'pct_chg', 'turnover_rate',
+            ]
+            df = df[[c for c in keep_cols if c in df.columns]]
+            return df.sort_values('trade_date').reset_index(drop=True)
+
+        except Exception as e:
+            logger.error(f"Tushare stk_mins 获取{symbol}分钟数据失败: {e}")
+            return None
+
     # stock_id:'000001.SH' start_time:'20180101' end_date='20180730'
     def get_income_statement(self,stock_id:str,start_time,end_time):
         fin = FinanceReportConstant()
@@ -175,6 +264,71 @@ class TushareService:
         #     print(df)
         return df
 
+
+    def get_income_by_period(self, period: str) -> Optional[pd.DataFrame]:
+        """按报告期批量获取所有公司利润表（如 period='20260331'）"""
+        fin = FinanceReportConstant()
+        fields = fin.is_fields_all
+        try:
+            df = self.pro.income(period=period, fields=fields)
+            logger.info(f"利润表 period={period} 获取到 {len(df) if df is not None else 0} 条")
+            return df
+        except Exception as e:
+            logger.error(f"批量获取利润表失败 period={period}: {e}")
+            return None
+
+    def get_balancesheet_by_period(self, period: str) -> Optional[pd.DataFrame]:
+        """按报告期批量获取所有公司资产负债表"""
+        fin = FinanceReportConstant()
+        fields = ','.join(fin.bs_fields_all)
+        try:
+            df = self.pro.balancesheet(period=period, fields=fields)
+            logger.info(f"资产负债表 period={period} 获取到 {len(df) if df is not None else 0} 条")
+            return df
+        except Exception as e:
+            logger.error(f"批量获取资产负债表失败 period={period}: {e}")
+            return None
+
+    def get_cashflow_by_period(self, period: str) -> Optional[pd.DataFrame]:
+        """按报告期批量获取所有公司现金流量表"""
+        fin = FinanceReportConstant()
+        fields = ','.join(fin.cfs_fields_all)
+        try:
+            df = self.pro.cashflow(period=period, fields=fields)
+            logger.info(f"现金流量表 period={period} 获取到 {len(df) if df is not None else 0} 条")
+            return df
+        except Exception as e:
+            logger.error(f"批量获取现金流量表失败 period={period}: {e}")
+            return None
+
+    def check_delisted_stocks(self, stock_ids: List[str]) -> List[str]:
+        """
+        通过 Tushare stock_basic 批量检查退市股票
+        :param stock_ids: 数据库中的股票代码列表（如 ['000023', '600070']）
+        :return: 其中已退市的股票代码列表
+        """
+        try:
+            delisted_df = self.pro.stock_basic(
+                exchange='',
+                list_status='D',
+                fields='ts_code,symbol,name,delist_date'
+            )
+
+            delisted_symbols = set(delisted_df['symbol'].tolist())
+
+            delisted_in_db = [sid for sid in stock_ids if sid in delisted_symbols]
+
+            print(f"数据库股票数量: {len(stock_ids)}")
+            print(f"Tushare已退市数量: {len(delisted_symbols)}")
+            print(f"数据库中已退市: {len(delisted_in_db)}")
+            if delisted_in_db:
+                print(f"退市列表: {delisted_in_db}")
+
+            return delisted_in_db
+
+        except Exception as e:
+            logger.error(f"检查退市股票失败: {e}")
+            return []
 
     @staticmethod
     def convert_stock_id(stock_id,location):
@@ -214,26 +368,19 @@ class TushareService:
             print(f"数据库已有股票数量: {len(stock_id_list)}")
             print(f"新增股票数量: {len(new_stocks)}")
             
-            # 5. 过滤出新股票
+            # 5. 过滤出新股票并插入基本信息（is_new=1）
             new_stocks_df = tushare_stocks_df[tushare_stocks_df['ts_code'].isin(new_stocks)]
             inserted_count = 0
+            db = DBManager()
             for _, stock_row in new_stocks_df.iterrows():
                 try:
-                    # 映射Tushare数据到数据库表结构
-                    mapped_data = self.map_tushare_to_stock_basic(stock_row)
-                    
-                    
-                    db = DBManager()
+                    mapped_data = self.map_tushare_to_stock_basic(stock_row, is_new=1)
                     db.update_basic_info(mapped_data)
-                    
                     inserted_count += 1
-                    
-                    print(f"已插入: {mapped_data['stock_id']} - {mapped_data['stock_name']}")
-                    
+                    print(f"已插入新股: {mapped_data['stock_id']} - {mapped_data['stock_name']}")
                 except Exception as e:
                     logger.error(f"插入股票 {stock_row['ts_code']} 失败: {e}")
                     continue
-            
             
             return new_stocks
             
@@ -253,9 +400,9 @@ class TushareService:
                 # 2.准备
                 tushare = TushareService()
                 db_manager = DBManager()
-                start_date = date(2025, 11, 14).strftime('%Y%m%d')
-                end_date = date(2025, 11, 14).strftime('%Y%m%d')
-                stock_list = db_manager.get_stock_id_list(is_new=0)
+                start_date = date(2026, 4, 30).strftime('%Y%m%d')
+                end_date = date(2026, 4, 30).strftime('%Y%m%d')
+                stock_list = db_manager.get_stock_id_list()
                 print(stock_list)
                 
                 # tushare: daily_day,weekly_week,monthly_month
@@ -291,7 +438,6 @@ class TushareService:
                             except Exception as e:
                                 logger.error(f"插入股票 {stock_row['ts_code']} 失败: {e}")
                                 continue
-                        time.sleep(0.31)
                         # weekly
                         period_tu = parts[0]
                         # week
@@ -299,13 +445,11 @@ class TushareService:
                         
                         log.info(f"正在处理股票: {stock},{period_local},{period_tu}")
 
-
                         raw_data = tushare.get_adj_stock_data(
                             symbol=newStockId,
-                            period = period_tu,
+                            period=period_tu,
                             start_date=start_date,
-                            end_date=end_date,
-                            adjust="qfq"
+                            end_date=end_date
                         )
                         
                         if raw_data is not None:
@@ -330,7 +474,7 @@ class TushareService:
                 logger.error(f"检查新增股票失败: {e}")
                 return []
 
-    def map_tushare_to_stock_basic(self,tushare_data):
+    def map_tushare_to_stock_basic(self, tushare_data, is_new=0):
         mapping = {
             'stock_name': 'name',                    # 股票名称
             'stock_id': 'ts_code',                   # 股票代码
@@ -378,7 +522,8 @@ class TushareService:
         # 4. 设置默认值 https://tushare.pro/document/2?doc_id=32
         time.sleep(0.301)
         stock_id = mapped_data['stock_id']
-        trade_basic = self.pro.daily_basic(ts_code= stock_id, trade_date='20250930', fields='ts_code,trade_date,turnover_rate,volume_ratio,total_mv,circ_mv,total_share,float_share')
+        latest_trade_date = self._get_latest_trade_date()
+        trade_basic = self.pro.daily_basic(ts_code=stock_id, trade_date=latest_trade_date, fields='ts_code,trade_date,turnover_rate,volume_ratio,total_mv,circ_mv,total_share,float_share')
         
         mapped_data.update({
             'circulating_market_value': self.get_numeric_value(trade_basic,'circ_mv',0.0) * 10000,
@@ -386,7 +531,7 @@ class TushareService:
             'circulating_stock': self.get_numeric_value(trade_basic,'float_share',0.0) * 10000,
             'total_stock': self.get_numeric_value(trade_basic,'total_share',0.0) * 10000,
             'create_user': 'tushare_sync',
-            'is_new': 1
+            'is_new': is_new
         })
         stock_id = self.convert_to_basic_stock_id(stock_id)
         mapped_data.update({
@@ -397,16 +542,20 @@ class TushareService:
     # 处理数值字段，确保是具体的数值而不是Series
     @staticmethod
     def get_numeric_value(data, key, default=0.0):
+        """从 DataFrame 或 dict 中安全提取数值"""
         value = data.get(key)
-        if hasattr(value, 'item'):  # 如果是numpy类型
-            return float(value.item())
-        elif value is None:
+        if value is None:
             return default
-        else:
-            try:
-                return float(value)
-            except (TypeError, ValueError):
+        if isinstance(value, pd.Series):
+            if value.empty:
                 return default
+            value = value.iloc[0]
+        if pd.isna(value):
+            return default
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
 
     def getBJStock(self,stock_id:str):
         setup_logger()
@@ -456,6 +605,67 @@ class TushareService:
             logger.error(f"操作tdengine异常: {e}")
         finally:
             return
-        
 
-    
+    def test_stk_week_month_adj(self):
+        """测试 stk_week_month_adj 接口，获取600479周线级别数据，对比三种复权"""
+        df = self.pro.stk_week_month_adj(
+            ts_code='600479.SH',
+            freq='week',
+            start_date='20260403',
+            end_date='20260403'
+        )
+        print("=== 返回所有列 ===")
+        print(df.columns.tolist())
+
+        common_cols = ['ts_code', 'trade_date', 'vol', 'amount', 'change', 'pct_chg']
+
+        print("\n=== 不复权 ===")
+        raw_cols = common_cols + ['open', 'high', 'low', 'close']
+        print(df[[c for c in raw_cols if c in df.columns]])
+
+        print("\n=== 前复权 (qfq) ===")
+        qfq_cols = common_cols + ['open_qfq', 'high_qfq', 'low_qfq', 'close_qfq']
+        print(df[[c for c in qfq_cols if c in df.columns]])
+
+        print("\n=== 后复权 (hfq) ===")
+        hfq_cols = common_cols + ['open_hfq', 'high_hfq', 'low_hfq', 'close_hfq']
+        print(df[[c for c in hfq_cols if c in df.columns]])
+
+    def test_income_000001(self):
+        """测试 000001 的 2026Q1 利润表实际返回"""
+        import pandas as pd
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', 200)
+
+        ts_code = '000001.SZ'
+
+        print("=" * 60)
+        print(f"测试1: income(ts_code={ts_code}, period='20260331')")
+        print("=" * 60)
+        df1 = self.pro.income(ts_code=ts_code, period='20260331')
+        print(f"返回行数: {len(df1) if df1 is not None else 'None'}")
+        if df1 is not None and not df1.empty:
+            print(df1[['ts_code', 'ann_date', 'f_ann_date', 'end_date', 'report_type', 'basic_eps', 'total_revenue', 'n_income']])
+        else:
+            print("无数据")
+
+        print("\n" + "=" * 60)
+        print(f"测试2: income(ts_code={ts_code}, start_date='20251231', end_date='20260331')")
+        print("=" * 60)
+        df2 = self.pro.income(ts_code=ts_code, start_date='20251231', end_date='20260331')
+        print(f"返回行数: {len(df2) if df2 is not None else 'None'}")
+        if df2 is not None and not df2.empty:
+            print(df2[['ts_code', 'ann_date', 'f_ann_date', 'end_date', 'report_type', 'basic_eps', 'total_revenue', 'n_income']])
+        else:
+            print("无数据")
+
+        print("\n" + "=" * 60)
+        print(f"测试3: income(ts_code={ts_code}, start_date='20250101', end_date='20260501') — 宽范围")
+        print("=" * 60)
+        df3 = self.pro.income(ts_code=ts_code, start_date='20250101', end_date='20260501')
+        print(f"返回行数: {len(df3) if df3 is not None else 'None'}")
+        if df3 is not None and not df3.empty:
+            print(df3[['ts_code', 'ann_date', 'f_ann_date', 'end_date', 'report_type', 'basic_eps', 'total_revenue', 'n_income']])
+        else:
+            print("无数据")
+

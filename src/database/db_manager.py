@@ -93,10 +93,17 @@ class DBManager:
             finally:
                 session.close()
                 
-    def get_stock_id_list(self,is_new:0)  -> List[StockBasicInfo] :
+    def get_stock_id_list(self, trade_date: str = '2026-04-03 00:00:00')  -> List[StockBasicInfo] :
+        """获取在stock_per_day_final中缺少指定trade_date数据的未退市股票"""
         session=self.Session()
         try:
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location).where(StockBasicInfo.is_retired==0).all()
+            sql = text("""
+            SELECT sbi.stock_id, sbi.location, sbi.launch_date FROM stock_basic_info sbi
+            WHERE sbi.is_retired = 0
+            ORDER BY sbi.stock_id ASC
+            """)
+            result = session.execute(sql, {'trade_date': trade_date})
+            stock_daily_list = result.fetchall()
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取stock列表失败: {e}")
@@ -107,7 +114,8 @@ class DBManager:
     def get_new_stock_id_list(self)  -> List[StockBasicInfo] :
         session=self.Session()
         try:
-            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location,StockBasicInfo.launch_date).where(StockBasicInfo.is_retired==0,StockBasicInfo.is_new == 1).all()
+            stock_daily_list = session.query(StockBasicInfo.stock_id,StockBasicInfo.location,StockBasicInfo.launch_date).where(StockBasicInfo.is_retired==0,
+                                                                                                                               StockBasicInfo.is_new == 1).all()
             return stock_daily_list
         except Exception as e:
             logger.error(f"获取stock列表失败: {e}")
@@ -330,6 +338,57 @@ class DBManager:
             print(f"调整股票 {stock_id} 失败: {str(e)}")
             # 可以在这里添加更详细的错误处理逻辑
             raise
+
+    def get_daily_data_from_db(self, stock_id: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """从 MySQL 读取某只股票的日线数据，用于聚合季度/年度"""
+        session = self.Session()
+        try:
+            sql = text("""
+                SELECT trade_date, start_price as open, end_price as close,
+                       high_price as high, low_price as low,
+                       volume as vol, amount, change_price as `change`,
+                       change_percent as pct_chg, turnover_ratio as turnover_rate
+                FROM stock_per_day_final
+                WHERE stock_id = :stock_id AND scope_type = 'day'
+                  AND trade_date >= :start_date AND trade_date <= :end_date
+                ORDER BY trade_date ASC
+            """)
+            result = session.execute(sql, {
+                'stock_id': stock_id,
+                'start_date': start_date,
+                'end_date': end_date,
+            })
+            rows = result.fetchall()
+            if not rows:
+                return pd.DataFrame()
+            columns = ['trade_date', 'open', 'close', 'high', 'low',
+                        'vol', 'amount', 'change', 'pct_chg', 'turnover_rate']
+            return pd.DataFrame(rows, columns=columns)
+        except Exception as e:
+            logger.error(f"查询日线数据失败: stock={stock_id} err={e}")
+            return pd.DataFrame()
+        finally:
+            session.close()
+
+    def get_latest_trade_date_by_scope(self, stock_id: str, scope_type: str):
+        """查询某只股票某个周期已入库的最新交易日期，用于增量拉取"""
+        session = self.Session()
+        try:
+            sql = text("""
+                SELECT MAX(trade_date) as max_date
+                FROM stock_per_day_final
+                WHERE stock_id = :stock_id AND scope_type = :scope_type
+            """)
+            result = session.execute(sql, {'stock_id': stock_id, 'scope_type': scope_type})
+            row = result.fetchone()
+            if row and row[0]:
+                return row[0]
+            return None
+        except Exception as e:
+            logger.error(f"查询最新交易日失败: stock={stock_id} scope={scope_type} err={e}")
+            return None
+        finally:
+            session.close()
 
     @staticmethod
     def convert_to_db_format_tushare(stockId:str,tushare_data: pd.DataFrame, period: str) -> pd.DataFrame:
