@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # 每周交易数据
     # ts.update_basic_get_stock()
     # 新股
-    # dig_data.dig_new_stock_info()
+    dig_data.dig_new_stock_info()
     
     # ====== 财报 ======
     # 方式1：智能增量 —— 自动检测每只股票缺失的报告期并补采（推荐日常使用）
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     # dig_mkt.dig_market_data(scopes=['60min'])
     # dig_mkt.dig_market_data(scopes=['month'])
     # dig_mkt.dig_market_data(scopes=['quarter', 'year'])
-    dig_mkt.dig_market_data(scopes=[ 'year'])
+    # dig_mkt.dig_market_data(scopes=[ 'year'])
     # 2. HK stock list , basic_info, finance_report,
     # 3. USA stock list, basic_info, finance_report
     # 退市

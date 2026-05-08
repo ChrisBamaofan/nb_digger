@@ -1,6 +1,6 @@
 data_sources:
   tushare:
-    api_key: "922bead97a3fa523fc498d2e22d7d8404f47b4b8c97a3e2d4ef7b6ed"
+    api_key: "671591df1894bfb78a8cf93ac62479687231c07d570e0d4c0d7ef85d"
     rate_limit: 5  # 请求间隔(秒)
   
   xueqiu:
