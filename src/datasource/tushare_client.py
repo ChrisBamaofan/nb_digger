@@ -4,6 +4,7 @@ from typing import List, Optional, Literal
 import utils.config_loader as cfg
 import logging
 from database.db_manager import DBManager
+import threading
 import time
 from datetime import date
 from utils.logger import setup_logger,log
@@ -18,6 +19,20 @@ logger = logging.getLogger(__name__)
 
 class TushareService:
     _latest_trade_date_cache = None
+    # stk_mins 低积分档约 2 次/分钟，全进程串行节流，避免频率超限
+    _stk_mins_lock = threading.Lock()
+    _stk_mins_last_mono = 0.0
+    STK_MINS_MIN_INTERVAL_SEC = 31.0
+
+    def _wait_stk_mins_slot(self) -> None:
+        with TushareService._stk_mins_lock:
+            now = time.monotonic()
+            if TushareService._stk_mins_last_mono > 0:
+                gap = now - TushareService._stk_mins_last_mono
+                need = TushareService.STK_MINS_MIN_INTERVAL_SEC - gap
+                if need > 0:
+                    time.sleep(need)
+            TushareService._stk_mins_last_mono = time.monotonic()
 
     def __init__(self):
         config = cfg.get_tushare()
@@ -122,6 +137,54 @@ class TushareService:
             logger.error(f"Tushare获取{symbol}{period}数据失败: {e}")
             return None
 
+    # 本地 scope → Tushare 拉取口径（与 update_basic_get_stock / fix / check 统一）
+    _SCOPE_QFQ_FETCH = {
+        'day':   'pro_bar',              # get_adj_stock_data, adj=qfq
+        'week':  'stk_week_month_adj',   # get_adj_stock_data_week_month_adj, period=weekly
+        'month': 'stk_week_month_adj',   # get_adj_stock_data_week_month_adj, period=monthly
+    }
+    _SCOPE_TO_TUSHARE_PERIOD = {
+        'day': 'daily',
+        'week': 'weekly',
+        'month': 'monthly',
+    }
+
+    def fetch_qfq_by_scope(
+        self,
+        symbol: str,
+        scope: str,
+        start_date: str,
+        end_date: str,
+    ) -> Optional[pd.DataFrame]:
+        """
+        按本地 scope 拉取 Tushare 前复权行情（统一入口）。
+
+        - day   → pro_bar / get_adj_stock_data(adjust='qfq')
+        - week  → stk_week_month_adj / get_adj_stock_data_week_month_adj(period='weekly')
+        - month → stk_week_month_adj / get_adj_stock_data_week_month_adj(period='monthly')
+
+        注意：pro_bar 的 qfq 仅日线生效；周/月线必须用 stk_week_month_adj。
+        """
+        period = self._SCOPE_TO_TUSHARE_PERIOD.get(scope)
+        if period is None:
+            raise ValueError(f"不支持的 scope: {scope}，仅 day/week/month")
+
+        if scope == 'day':
+            return self.get_adj_stock_data(
+                symbol=symbol,
+                period=period,
+                start_date=start_date,
+                end_date=end_date,
+                adjust='qfq',
+            )
+        return self.get_adj_stock_data_week_month_adj(
+            symbol=symbol,
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
+            adjust='qfq',
+        )
+
     def get_adj_stock_data(
         self,
         symbol: str,
@@ -154,9 +217,39 @@ class TushareService:
                 factors=['tor'],
             )
 
+            print(f"[get_adj_stock_data] pro_bar 原始 df: {symbol} freq={freq}")
+            if df is None:
+                print("  df: None")
+            elif df.empty:
+                print("  df: empty DataFrame")
+            else:
+                print(f"  columns={list(df.columns)} shape={df.shape}")
+                with pd.option_context(
+                    "display.max_columns", None,
+                    "display.width", 240,
+                    "display.max_rows", 80,
+                ):
+                    print(df)
+
             if df is None or df.empty:
                 logger.warning(f"未获取到{symbol}的行情数据")
                 return None
+
+            # ── qfq 列替换：pro_bar adj='qfq' 会同时返回原始列和 qfq_* 列 ──
+            if adjust == 'qfq' and 'qfq_close' in df.columns:
+                df = df.assign(
+                    open=df['qfq_open'],
+                    high=df['qfq_high'],
+                    low=df['qfq_low'],
+                    close=df['qfq_close'],
+                )
+            elif adjust == 'hfq' and 'hfq_close' in df.columns:
+                df = df.assign(
+                    open=df['hfq_open'],
+                    high=df['hfq_high'],
+                    low=df['hfq_low'],
+                    close=df['hfq_close'],
+                )
 
             if 'tor' in df.columns:
                 df = df.rename(columns={'tor': 'turnover_rate'})
@@ -168,12 +261,83 @@ class TushareService:
             df = df[[c for c in keep_cols if c in df.columns]]
             df['stock_id'] = symbol
 
-            return df.sort_values('trade_date').reset_index(drop=True)
+            df = df.sort_values('trade_date').reset_index(drop=True)
+            print(f"[get_adj_stock_data] 列筛选并排序后 df: {symbol}")
+            print(f"  columns={list(df.columns)} shape={df.shape}")
+            with pd.option_context(
+                "display.max_columns", None,
+                "display.width", 240,
+                "display.max_rows", 80,
+            ):
+                print(df)
+
+            return df
 
         except Exception as e:
             logger.error(f"Tushare pro_bar 获取{symbol}行情失败: {e}")
             return None
-    
+
+    def get_adj_stock_data_week_month_adj(
+        self,
+        symbol: str,
+        period: Literal['weekly', 'monthly'] = 'weekly',
+        start_date: str = None,
+        end_date: str = None,
+        adjust: str = 'qfq',
+    ) -> Optional[pd.DataFrame]:
+        """
+        通过 stk_week_month_adj 获取股票周/月线行情（复权口径，每日更新）。
+        文档: https://tushare.pro/document/2?doc_id=365
+        需约 2000 积分；仅支持 weekly / monthly，日线请用 get_adj_stock_data(pro_bar)。
+
+        :param adjust: 'qfq' 使用前复权 OHLC；'hfq' 使用后复权；其它/None 使用接口返回的不复权 open/high/low/close
+        :return: 列与 get_adj_stock_data 对齐（无换手率时不含 turnover_rate）
+        """
+        freq = 'week' if period == 'weekly' else 'month'
+        try:
+            logger.info(
+                f"stk_week_month_adj: {symbol} freq={freq} adj={adjust} {start_date}~{end_date}"
+            )
+
+            df = self.pro.stk_week_month_adj(
+                ts_code=symbol,
+                freq=freq,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+            if df is None or df.empty:
+                logger.warning(f"未获取到{symbol}的 stk_week_month_adj 数据")
+                return None
+
+            if adjust == 'qfq' and 'close_qfq' in df.columns:
+                df = df.assign(
+                    open=df['open_qfq'],
+                    high=df['high_qfq'],
+                    low=df['low_qfq'],
+                    close=df['close_qfq'],
+                )
+            elif adjust == 'hfq' and 'close_hfq' in df.columns:
+                df = df.assign(
+                    open=df['open_hfq'],
+                    high=df['high_hfq'],
+                    low=df['low_hfq'],
+                    close=df['close_hfq'],
+                )
+
+            keep_cols = [
+                'trade_date', 'open', 'high', 'low', 'close',
+                'vol', 'amount', 'change', 'pct_chg', 'turnover_rate',
+            ]
+            df = df[[c for c in keep_cols if c in df.columns]]
+            df['stock_id'] = symbol
+
+            return df.sort_values('trade_date').reset_index(drop=True)
+
+        except Exception as e:
+            logger.error(f"Tushare stk_week_month_adj 获取{symbol}行情失败: {e}")
+            return None
+
     def get_minute_data(
         self,
         symbol: str,
@@ -189,44 +353,56 @@ class TushareService:
         :param end_date:   结束日期
         :return: DataFrame，列名与 get_adj_stock_data 对齐
         """
-        try:
-            if start_date and len(start_date) == 8:
-                start_date = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]} 09:00:00"
-            if end_date and len(end_date) == 8:
-                end_date = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]} 16:00:00"
+        if start_date and len(start_date) == 8:
+            start_date = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]} 09:00:00"
+        if end_date and len(end_date) == 8:
+            end_date = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]} 16:00:00"
 
-            logger.info(f"stk_mins: {symbol} freq={freq} {start_date}~{end_date}")
+        logger.info(f"stk_mins: {symbol} freq={freq} {start_date}~{end_date}")
 
-            df = self.pro.stk_mins(
-                ts_code=symbol,
-                freq=freq,
-                start_date=start_date,
-                end_date=end_date,
-            )
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                self._wait_stk_mins_slot()
+                df = self.pro.stk_mins(
+                    ts_code=symbol,
+                    freq=freq,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
 
-            if df is None or df.empty:
-                logger.warning(f"未获取到{symbol}的分钟数据")
+                if df is None or df.empty:
+                    logger.warning(f"未获取到{symbol}的分钟数据")
+                    return None
+
+                df = df.rename(columns={
+                    'trade_time': 'trade_date',
+                    'vol': 'vol',
+                })
+                df['change'] = 0.0
+                df['pct_chg'] = 0.0
+                df['turnover_rate'] = 0.0
+                df['stock_id'] = symbol
+
+                keep_cols = [
+                    'trade_date', 'open', 'high', 'low', 'close',
+                    'vol', 'amount', 'change', 'pct_chg', 'turnover_rate',
+                ]
+                df = df[[c for c in keep_cols if c in df.columns]]
+                return df.sort_values('trade_date').reset_index(drop=True)
+
+            except Exception as e:
+                msg = str(e)
+                if ('频率超限' in msg or '频次' in msg) and attempt < max_retries - 1:
+                    logger.warning(
+                        f"stk_mins 频率限制，60s 后重试 ({attempt + 1}/{max_retries}): {symbol}"
+                    )
+                    time.sleep(60)
+                    continue
+                logger.error(f"Tushare stk_mins 获取{symbol}分钟数据失败: {e}")
                 return None
 
-            df = df.rename(columns={
-                'trade_time': 'trade_date',
-                'vol': 'vol',
-            })
-            df['change'] = 0.0
-            df['pct_chg'] = 0.0
-            df['turnover_rate'] = 0.0
-            df['stock_id'] = symbol
-
-            keep_cols = [
-                'trade_date', 'open', 'high', 'low', 'close',
-                'vol', 'amount', 'change', 'pct_chg', 'turnover_rate',
-            ]
-            df = df[[c for c in keep_cols if c in df.columns]]
-            return df.sort_values('trade_date').reset_index(drop=True)
-
-        except Exception as e:
-            logger.error(f"Tushare stk_mins 获取{symbol}分钟数据失败: {e}")
-            return None
+        return None
 
     # stock_id:'000001.SH' start_time:'20180101' end_date='20180730'
     def get_income_statement(self,stock_id:str,start_time,end_time):
@@ -400,8 +576,8 @@ class TushareService:
                 # 2.准备
                 tushare = TushareService()
                 db_manager = DBManager()
-                start_date = date(2026, 4, 30).strftime('%Y%m%d')
-                end_date = date(2026, 4, 30).strftime('%Y%m%d')
+                start_date = date(2026,10,23).strftime('%Y%m%d')
+                end_date = date(2026, 10,23).strftime('%Y%m%d')
                 stock_list = db_manager.get_stock_id_list()
                 print(stock_list)
                 
@@ -445,13 +621,32 @@ class TushareService:
                         
                         log.info(f"正在处理股票: {stock},{period_local},{period_tu}")
 
-                        raw_data = tushare.get_adj_stock_data(
+                        raw_data = tushare.fetch_qfq_by_scope(
                             symbol=newStockId,
-                            period=period_tu,
+                            scope=period_local,
                             start_date=start_date,
-                            end_date=end_date
+                            end_date=end_date,
                         )
-                        
+                        print(
+                            f"[get_adj_stock_data] {newStockId} period={period_tu} "
+                            f"{start_date}~{end_date}"
+                        )
+                        if raw_data is None:
+                            print("  raw_data: None")
+                        elif raw_data.empty:
+                            print("  raw_data: empty DataFrame")
+                        else:
+                            print(
+                                f"  raw_data: shape={raw_data.shape} "
+                                f"columns={list(raw_data.columns)}"
+                            )
+                            with pd.option_context(
+                                "display.max_columns", None,
+                                "display.width", 240,
+                                "display.max_rows", 80,
+                            ):
+                                print(raw_data)
+
                         if raw_data is not None:
                             """同步数据到 mysql"""
                             db_ready_data = db_manager.convert_to_db_format_tushare(stock_id,raw_data,period_local)

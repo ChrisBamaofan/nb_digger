@@ -98,17 +98,18 @@ def _fetch_and_save_60min(ts: TushareService, db_manager: DBManager,
                           stock_id: str, location: str,
                           start_date: str, end_date: str):
     """
-    拉取 60min 数据, stk_mins 单次最多 8000 行 (~33 个交易日).
-    按 30 天分段循环拉取.
+    拉取 60min 数据。stk_mins 低积分约 2 次/分钟，节流与重试在 TushareService.get_minute_data。
+    60min K 线单日条数远少于 1min，单次按约 90 天分段，减少请求次数（仍低于 8000 行上限）。
     """
     ts_code = _ts_code(stock_id, location)
     scope = '60min'
     total = 0
     cur_start = pd.to_datetime(start_date)
     dt_end = pd.to_datetime(end_date)
+    segment_days = 89  # 与下一天衔接: +1 天步进 => 约 90 天窗口
 
     while cur_start <= dt_end:
-        seg_end = min(cur_start + timedelta(days=29), dt_end)
+        seg_end = min(cur_start + timedelta(days=segment_days), dt_end)
         s_str = cur_start.strftime('%Y%m%d')
         e_str = seg_end.strftime('%Y%m%d')
 
@@ -122,7 +123,6 @@ def _fetch_and_save_60min(ts: TushareService, db_manager: DBManager,
             total += len(db_data)
 
         cur_start = seg_end + timedelta(days=1)
-        time.sleep(RATE_LIMIT_SEC)
 
     return total
 
@@ -213,7 +213,6 @@ def dig_market_data(scopes=None):
                     n = _fetch_and_save_tushare(
                         ts, db_manager, stock_id, location, scope, start, today)
                 elif scope == '60min':
-                    time.sleep(RATE_LIMIT_SEC)
                     n = _fetch_and_save_60min(
                         ts, db_manager, stock_id, location, start, today)
                 elif scope in ('quarter', 'year'):

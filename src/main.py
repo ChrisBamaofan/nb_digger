@@ -11,14 +11,14 @@ import dig_finance_report_tushare as dig_tsh
 import dig_market_data as dig_mkt
 
 import akshare as ak
-from checkPerDayFinal import fixDataAfterFQ
+from checkPerDayFinal import fixDataAfterFQ,checkData
 
 def updateCycleValue():
     setup_logger()
     ak = AKShareClient()
     db_manager = DBManager()
 
-    stock_list = db_manager.get_stock_id_list(is_new=0)
+    stock_list = db_manager.get_stock_id_list()
     for stock in stock_list:
         time.sleep(3)
         stock_id = stock.stock_id
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # 每周交易数据
     # ts.update_basic_get_stock()
     # 新股
-    dig_data.dig_new_stock_info()
+    # dig_data.dig_new_stock_info()
     
     # ====== 财报 ======
     # 方式1：智能增量 —— 自动检测每只股票缺失的报告期并补采（推荐日常使用）
@@ -108,5 +108,6 @@ if __name__ == "__main__":
     # 退市
     # updateRetiredStocks()
     
-    # 赋权后更新股价
-    # fixDataAfterFQ()
+    # 三、赋权后更新股价
+    fixDataAfterFQ()
+    #checkData()

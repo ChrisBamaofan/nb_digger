@@ -389,7 +389,7 @@ def dig_new_stock_info():
         logger.info(f'发现新股数量: {len(new_ts_codes)}')
 
         # 1.2 获取刚插入的 is_new=1 的股票列表
-        end_date = date(2026, 4, 12).strftime('%Y%m%d')
+        end_date = date(2026, 10, 2).strftime('%Y%m%d')
         stock_list = db_manager.get_new_stock_id_list()
         logger.info(f'待处理新股数量: {len(stock_list)}')
         logger.info(stock_list)
@@ -450,7 +450,7 @@ def dig_new_stock_info():
                 dig_tsh.dig_balance_sheet_yoy_tushare(stock_list=single_stock)
                 dig_tsh.dig_cash_flow_statement_tushare(stock_list=single_stock)
                 dig_tsh.dig_cash_flow_statement_yoy_tushare(stock_list=single_stock)
-                # todo 更新 is_new = 0
+                # todo 更新 is_new = 1
                 basic_info = {
                     'stock_id': stock_id,
                     'is_new': 0

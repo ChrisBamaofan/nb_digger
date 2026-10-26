@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Tuple
 from sqlalchemy import create_engine,update
 from sqlalchemy.orm import sessionmaker
 from .models import Base
@@ -8,8 +8,34 @@ import pandas as pd
 from sqlalchemy import desc  
 from database.models import StockDaily,StockBasicInfo
 from sqlalchemy import text
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 
 class DBManager:
+    @staticmethod
+    def quantize_price(value) -> Optional[Decimal]:
+        """将价格安全量化为两位 Decimal；NaN/None/无效值返回 None。"""
+        if value is None:
+            return None
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
+        try:
+            price = Decimal(str(value))
+            if not price.is_finite():
+                return None
+            return price.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _price_series_to_float(series: pd.Series) -> pd.Series:
+        """OHLC 序列统一量化为两位小数 float，无效值填 0。"""
+        return series.apply(
+            lambda v: float(p) if (p := DBManager.quantize_price(v)) is not None else 0.0
+        )
+
     def __init__(self):
         config = load_db_config()
         print("Loaded DB config:", config)  # 调试输出
@@ -102,9 +128,10 @@ class DBManager:
             WHERE sbi.is_retired = 0
             ORDER BY sbi.stock_id ASC
             """)
+            
             result = session.execute(sql, {'trade_date': trade_date})
             stock_daily_list = result.fetchall()
-            return stock_daily_list
+            return stock_daily_list # type: ignore
         except Exception as e:
             logger.error(f"获取stock列表失败: {e}")
             raise
@@ -300,9 +327,20 @@ class DBManager:
 
 
     # 批量更新
-    def execute_bulk_price_adjustment(self, stock_id, adjustment_diff, adjustment_date):
+    def execute_bulk_price_adjustment(self, stock_id, adjustment_diff, adjustment_date,
+                                       scope_types=None):
+        """
+        批量修正股价，默认修正 day/week/month（有 Tushare qfq 源的周期）。
+        quarter/year 由聚合逻辑另行处理。
         
-        sql = text("""
+        :param scope_types: 要修正的 scope 列表，None 或省略 = ['day','week','month']
+        """
+        if scope_types is None:
+            scope_types = ['day', 'week', 'month']
+        
+        scopes_placeholder = ','.join([f"'{s}'" for s in scope_types])
+        
+        sql = text(f"""
         UPDATE stock_per_day_final 
         SET 
             start_price = start_price + :diff,
@@ -312,7 +350,7 @@ class DBManager:
         WHERE 
             stock_id = :stock_id 
             AND trade_date <= :adjust_date
-            AND scope_type = 'week'
+            AND scope_type IN ({scopes_placeholder})
         """)
         
         params = {
@@ -337,6 +375,141 @@ class DBManager:
         except Exception as e:
             print(f"调整股票 {stock_id} 失败: {str(e)}")
             # 可以在这里添加更详细的错误处理逻辑
+            raise
+
+    def delete_stock_data_by_date_range(self, stock_id: str, scope_type: str,
+                                         start_date: str, end_date: str) -> int:
+        """
+        删除某股票某 scope 在指定日期范围内的所有数据。
+        用于复权修正：删除脏数据后重新拉取插入。
+        
+        :param start_date: 开始日期 YYYYMMDD（包含）
+        :param end_date:   结束日期 YYYYMMDD（包含）
+        :return: 删除行数
+        """
+        sql = text("""
+        DELETE FROM stock_per_day_final
+        WHERE stock_id = :stock_id
+          AND scope_type = :scope_type
+          AND trade_date >= :start_date
+          AND trade_date <= :end_date
+        """)
+        try:
+            with self.Session() as session:
+                result = session.execute(sql, {
+                    'stock_id': stock_id,
+                    'scope_type': scope_type,
+                    'start_date': start_date,
+                    'end_date': end_date,
+                })
+                session.commit()
+                deleted = result.rowcount
+                logger.info(f"删除 {stock_id} {scope_type} [{start_date}~{end_date}]: {deleted} 行")
+                return deleted
+        except Exception as e:
+            logger.error(f"删除 {stock_id} {scope_type} 失败: {e}")
+            raise
+
+    def batch_insert_tushare_data(self, data_df: pd.DataFrame, scope_type: str,
+                                   stock_id: str) -> int:
+        """
+        批量插入 Tushare qfq 数据（已通过 convert_to_db_format_tushare 转换格式），
+        覆盖 stock_per_day_final 表。
+
+        与 save_daily_data 区别：本方法使用 INSERT（不复用 session.merge），
+        因为调用前已经 DELETE 了旧数据，不需要 upsert 行为，INSERT 更快。
+        
+        :param data_df:  已经转换好格式的 DataFrame（列名对齐 stock_per_day_final）
+        :param scope_type: 'day'/'week'/'month' 等
+        :param stock_id:  股票代码
+        :return: 插入行数
+        """
+        if data_df.empty:
+            return 0
+        session = self.Session()
+        try:
+            data_df = data_df.copy()
+            numeric_cols = ['amount', 'volume', 'start_price', 'end_price',
+                            'high_price', 'low_price', 'change_price',
+                            'change_percent', 'turnover_ratio']
+            for col in numeric_cols:
+                if col in data_df.columns:
+                    data_df[col] = pd.to_numeric(data_df[col], errors='coerce').fillna(0)
+
+            records = [StockDaily(**row) for row in data_df.to_dict('records')]
+            session.add_all(records)
+            session.commit()
+            logger.info(f"批量插入 {stock_id} {scope_type}: {len(records)} 条")
+            return len(records)
+        except Exception as e:
+            session.rollback()
+            logger.error(f"批量插入 {stock_id} {scope_type} 失败: {e}")
+            raise
+        finally:
+            session.close()
+
+    def batch_upsert_tushare_data(self, data_df: pd.DataFrame, scope_type: str,
+                                   stock_id: str) -> int:
+        """
+        批量 upsert（INSERT ON DUPLICATE KEY UPDATE），使用 MySQL 原生语法。
+        依赖 stock_per_day_final 表的 UNIQUE KEY (stock_id, scope_type, trade_date)。
+        无需先 DELETE，直接原地覆盖，性能远高于 DELETE + INSERT。
+
+        :param data_df:   已通过 convert_to_db_format_tushare 转换好格式的 DataFrame
+        :param scope_type: 'day'/'week'/'month' 等
+        :param stock_id:  股票代码
+        :return: 受影响行数
+        """
+        if data_df.empty:
+            return 0
+
+        data_df = data_df.copy()
+        numeric_cols = ['amount', 'volume', 'start_price', 'end_price',
+                        'high_price', 'low_price', 'change_price',
+                        'change_percent', 'turnover_ratio']
+        for col in numeric_cols:
+            if col in data_df.columns:
+                data_df[col] = pd.to_numeric(data_df[col], errors='coerce').fillna(0)
+
+        # 构建 VALUES 列表
+        value_rows = []
+        for _, row in data_df.iterrows():
+            trade_date = pd.to_datetime(row['trade_date']).strftime('%Y-%m-%d %H:%M:%S')
+            value_rows.append(
+                f"('{stock_id}', '{trade_date}', '{scope_type}', "
+                f"{int(row['amount'])}, {int(row['volume'])}, "
+                f"{float(row['start_price'])}, {float(row['end_price'])}, "
+                f"{float(row['high_price'])}, {float(row['low_price'])}, "
+                f"{float(row['change_price'])}, {float(row['change_percent'])}, "
+                f"{float(row['turnover_ratio'])})"
+            )
+
+        sql = f"""
+        INSERT INTO stock_per_day_final
+            (stock_id, trade_date, scope_type,
+             amount, volume, start_price, end_price, high_price, low_price,
+             change_price, change_percent, turnover_ratio)
+        VALUES {','.join(value_rows)}
+        ON DUPLICATE KEY UPDATE
+            amount = VALUES(amount),
+            volume = VALUES(volume),
+            start_price = VALUES(start_price),
+            end_price = VALUES(end_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            change_price = VALUES(change_price),
+            change_percent = VALUES(change_percent),
+            turnover_ratio = VALUES(turnover_ratio)
+        """
+        try:
+            with self.Session() as session:
+                result = session.execute(text(sql))
+                session.commit()
+                affected = result.rowcount
+                logger.info(f"UPSERT {stock_id} {scope_type}: {affected} 行")
+                return affected
+        except Exception as e:
+            logger.error(f"UPSERT {stock_id} {scope_type} 失败: {e}")
             raise
 
     def get_daily_data_from_db(self, stock_id: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -391,26 +564,72 @@ class DBManager:
             session.close()
 
     @staticmethod
+    def _tushare_change_pct_from_close(tushare_data: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+        """用本周(期)收盘相对上一周期收盘计算涨跌额、涨跌幅(%)，与日线 change/pct_chg 口径一致。"""
+        close = pd.to_numeric(tushare_data['close'], errors='coerce')
+        prev = close.shift(1)
+        ch = close - prev
+        pct = (ch / prev * 100).where(prev.notna() & (prev != 0), 0.0)
+        return ch.fillna(0.0), pct.fillna(0.0)
+
+    @staticmethod
+    def _tushare_effective_change_pct(tushare_data: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+        """
+        优先使用接口返回的 change / pct_chg；若缺列、全 NaN 或全为 0（周/月线 pro_bar 常见），则按收盘价推算。
+        """
+        close = pd.to_numeric(tushare_data['close'], errors='coerce')
+
+        def _usable_series(name: str) -> Optional[pd.Series]:
+            if name not in tushare_data.columns:
+                return None
+            s = pd.to_numeric(tushare_data[name], errors='coerce')
+            if not s.notna().any():
+                return None
+            if (s.fillna(0).abs() < 1e-12).all():
+                return None
+            return s
+
+        ch_api = _usable_series('change')
+        pct_api = _usable_series('pct_chg')
+
+        ch_fb, pct_fb = DBManager._tushare_change_pct_from_close(tushare_data)
+
+        if ch_api is not None:
+            change_price = ch_api.fillna(0.0)
+        else:
+            change_price = ch_fb
+
+        if pct_api is not None:
+            change_percent = pct_api.fillna(0.0)
+        else:
+            change_percent = pct_fb
+
+        return change_price, change_percent
+
+    @staticmethod
     def convert_to_db_format_tushare(stockId:str,tushare_data: pd.DataFrame, period: str) -> pd.DataFrame:
         """
         将Tushare数据转换为数据库表字段格式
         """
         if tushare_data.empty:
             return pd.DataFrame()
-        
-        # Tushare数据字段映射:cite[9]
+
+        change_price, change_percent = DBManager._tushare_effective_change_pct(tushare_data)
+
+        tor = tushare_data['turnover_rate'] if 'turnover_rate' in tushare_data.columns else 0.0
+
         return pd.DataFrame({
             'stock_id': stockId,
             'trade_date': tushare_data['trade_date'],
             'amount': tushare_data['amount'],
             'volume': tushare_data['vol'],  # 注意字段名差异
-            'start_price': tushare_data['open'],
-            'end_price': tushare_data['close'],
-            'high_price': tushare_data['high'],
-            'low_price': tushare_data['low'],
-            'change_price': tushare_data.get('change', 0),  # 涨跌额
-            'change_percent': tushare_data.get('pct_chg', 0),  # 涨跌幅
-            'turnover_ratio': tushare_data.get('turnover_rate', 0),  # 换手率
+            'start_price': DBManager._price_series_to_float(tushare_data['open']),
+            'end_price': DBManager._price_series_to_float(tushare_data['close']),
+            'high_price': DBManager._price_series_to_float(tushare_data['high']),
+            'low_price': DBManager._price_series_to_float(tushare_data['low']),
+            'change_price': change_price,
+            'change_percent': change_percent,
+            'turnover_ratio': tor,
             'scope_type': period,
             'create_user': 'system'
         })

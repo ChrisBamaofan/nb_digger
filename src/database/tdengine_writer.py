@@ -155,6 +155,34 @@ class TDEngineWriter:
             raise
 
     @staticmethod
+    def delete_by_date_range(table_name: str, start_date: str, end_date: str) -> int:
+        """
+        删除 TDEngine 表中指定日期范围的数据。
+        用于复权修正：清除脏数据后重新插入 Tushare qfq 数据。
+        
+        :param table_name: TDEngine 动态表名，如 'week_000001'
+        :param start_date: 开始日期 YYYYMMDD（包含）
+        :param end_date:   结束日期 YYYYMMDD（包含）
+        :return: 删除行数
+        """
+        utc_start = tdengine._convert_to_utc(start_date)
+        utc_end = tdengine._convert_to_utc(end_date)
+        
+        sql = f"""
+        DELETE FROM `{table_name}`
+        WHERE trade_date >= '{utc_start}'
+          AND trade_date <= '{utc_end}'
+        """
+        try:
+            result = tdengine.conn.query(sql)
+            deleted = result.rows if hasattr(result, 'rows') and result.rows else 0
+            log.info(f"TDEngine DELETE {table_name} [{start_date}~{end_date}]: {deleted} 行")
+            return deleted
+        except Exception as e:
+            log.warning(f"TDEngine DELETE {table_name} 失败(表可能不存在): {e}")
+            return 0
+
+    @staticmethod
     def insert_income_statement(tushare_data,stock_id:str,location):
         
         # 映射到雪球结构
